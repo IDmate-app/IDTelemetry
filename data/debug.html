@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Telemetry Stick · Debug</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="/style.css">
+<style>
+.tx-box{background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:12px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px}
+.wifi-net{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:4px;margin-bottom:4px;border:1px solid transparent;transition:background .15s}
+.wifi-net:hover{background:rgba(0,212,255,.05);border-color:var(--border)}
+.wifi-ssid{font-family:var(--mono);font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wifi-meta{font-size:10px;color:var(--muted);flex-shrink:0;text-align:right;line-height:1.6}
+.wifi-bar{height:8px;border-radius:2px;flex-shrink:0;min-width:4px}
+.time-inputs{display:flex;align-items:center;gap:6px}
+.time-inputs input{width:56px;text-align:center;font-size:16px;font-weight:700;padding:6px 4px}
+.time-sep{font-size:20px;font-weight:700;color:var(--accent);line-height:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow1">
+    <button type="button" class="burger-btn" onclick="toggleMenu(event)">&#9776;</button>
+    <div class="logo">TS<span>.</span>DEBUG <span id="fw-ver" style="font-size:9px;color:var(--muted);font-weight:400"></span></div>
+    <span style="flex:1"></span>
+    <div class="led-g"><div class="led" id="led-gps"></div><span class="led-lbl">GPS</span></div>
+    <div class="modem-w">
+      <div class="modem-bars">
+        <div class="modem-bar bar1" id="mb1"></div>
+        <div class="modem-bar bar2" id="mb2"></div>
+        <div class="modem-bar bar3" id="mb3"></div>
+        <div class="modem-bar bar4" id="mb4"></div>
+        <div class="modem-bar bar5" id="mb5"></div>
+      </div>
+      <div class="modem-op" id="modem-op">--</div>
+    </div>
+    <nav class="drop-nav" id="drop-nav" style="display:none">
+      <a href="/daten" data-i18n="nav.data">DATA</a>
+      <a href="/debug" class="active" data-i18n="nav.debug">DEBUG</a>
+      <a href="/config" data-i18n="nav.config">CONFIG</a>
+    </nav>
+  </div>
+  <div class="hrow2">
+    <div class="led-g"><div class="led blue" id="led-can"></div><span class="led-lbl">CAN</span></div>
+    <div class="led-g"><div class="led" id="led-ble"></div><span class="led-lbl">BLE</span></div>
+    <div class="led-g"><div class="led" id="led-gyro"></div><span class="led-lbl">GYRO</span></div>
+    <div class="led-g"><div class="led" id="led-tx"></div><span class="led-lbl">TX</span></div>
+    <div class="led-g"><div class="led" id="led-rx"></div><span class="led-lbl">RX</span></div>
+    <div class="led-g" style="min-width:38px"><span id="batt-pct" style="font-size:10px;font-weight:700;color:var(--muted)">--</span><span class="led-lbl">BAT</span></div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Uhrzeit -->
+  <div class="section-title" data-i18n="dbg.rtc_title">Uhrzeit (RTC DS1307)</div>
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div style="flex:1">
+        <div class="lbl" data-i18n="dbg.rtc_datetime">RTC Datum & Zeit</div>
+        <div id="rtc-date-display" style="font-size:14px;color:var(--muted);margin-bottom:2px">--.--.----</div>
+        <div id="rtc-display" style="font-size:28px;font-weight:700;color:var(--accent);letter-spacing:3px">--:--:--</div>
+      </div>
+      <div style="text-align:right">
+        <div id="rtc-status" style="font-size:11px;color:var(--muted)">Lade...</div>
+        <div id="rtc-ok-badge" style="font-size:11px;margin-top:4px"></div>
+      </div>
+    </div>
+    <div>
+      <div class="lbl" style="margin-bottom:8px" data-i18n="dbg.rtc_manual">Datum & Zeit manuell setzen</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <input type="date" id="set-date" style="font-family:inherit;font-size:13px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+        <div class="time-inputs">
+          <input type="number" id="set-hour" min="0" max="23" placeholder="HH" value="">
+          <span class="time-sep">:</span>
+          <input type="number" id="set-min" min="0" max="59" placeholder="MM" value="">
+          <span class="time-sep">:</span>
+          <input type="number" id="set-sec" min="0" max="59" placeholder="SS" value="0">
+        </div>
+        <button class="btn accent" onclick="setRtcTime()" data-i18n="dbg.rtc_set">&#10003; Setzen</button>
+        <button class="btn" onclick="prefillBrowserTime()" style="font-size:10px" data-i18n="dbg.rtc_browser">Browser-Zeit &#252;bernehmen</button>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px">
+        <span data-i18n="dbg.rtc_hint">Zeit wird im RTC gespeichert und bleibt auch nach Stromausfall erhalten (CR2032 n&#246;tig).</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gyro Schreiber -->
+  <div class="section-title" data-i18n="dbg.gyro_title">Gyro Schreiber</div>
+  <div class="card" style="padding:12px 16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+      <span style="font-size:10px;color:var(--muted)" data-i18n="dbg.gyro_subtitle">letzte 30s &bull; 100ms Aufl&#246;sung</span>
+      <span style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="display:flex;align-items:center;gap:4px">
+          <span data-i18n="dbg.gyro_detect_thr">Erkenn-Schwelle:</span>&nbsp;
+          <input id="gyro-thr-input" type="number" step="0.005" min="0.005" max="1.0" value="0.030"
+                 style="width:68px;font-size:11px;padding:2px 4px;background:var(--bg3);color:var(--yellow);border:1px solid var(--border);border-radius:3px;text-align:center">
+          <span style="color:var(--muted)">G</span>
+          <button class="btn" style="font-size:9px;padding:2px 8px" onclick="gyroSetThreshold()" data-i18n="dbg.gyro_set">Setzen</button>
+        </span>
+        <span style="display:flex;align-items:center;gap:4px">
+          <span data-i18n="dbg.gyro_wake_thr">Aufwach-Schwelle:</span>&nbsp;
+          <input id="gyro-mot-input" type="number" step="1" min="1" max="255" value="5"
+                 style="width:52px;font-size:11px;padding:2px 4px;background:var(--bg3);color:var(--accent);border:1px solid var(--border);border-radius:3px;text-align:center">
+          <span style="color:var(--muted)" id="gyro-mot-mg">&#215;32mg</span>
+          <button class="btn" style="font-size:9px;padding:2px 8px" onclick="gyroSetMotThreshold()" data-i18n="dbg.gyro_set">Setzen</button>
+        </span>
+        <span><span data-i18n="dbg.gyro_current">Akt:</span>&nbsp;<span id="gyro-val" style="color:var(--accent);font-weight:700">--</span></span>
+        <span><span data-i18n="dbg.gyro_peak">Peak:</span>&nbsp;<span id="gyro-peak" style="color:var(--orange);font-weight:700">--</span></span>
+        <button class="btn" style="font-size:9px;padding:2px 8px" onclick="gyroPeakReset()" data-i18n="dbg.gyro_peak_reset">Peak &#8634;</button>
+      </span>
+    </div>
+    <div style="display:flex;gap:12px;align-items:stretch;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <canvas id="gyro-canvas" style="width:100%;height:110px;display:block;border-radius:3px"></canvas>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--muted);padding:0 2px">
+          <span>-30s</span><span>-20s</span><span>-10s</span><span>jetzt</span>
+        </div>
+      </div>
+      <div style="flex:0 0 180px;display:flex;flex-direction:column;gap:4px;justify-content:center">
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:10px;color:#00e5ff;width:14px;text-align:right;font-weight:bold">X</span>
+          <div style="flex:1;height:16px;background:#1a1a2e;border-radius:3px;position:relative;overflow:hidden">
+            <div id="bar-x" style="position:absolute;top:0;height:100%;background:#00e5ff;border-radius:3px;transition:left 0.1s,width 0.1s;left:50%;width:0"></div>
+            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#444"></div>
+          </div>
+          <span id="val-x" style="font-size:9px;color:#00e5ff;width:36px;text-align:right;font-family:monospace">0.00</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:10px;color:#ffd600;width:14px;text-align:right;font-weight:bold">Y</span>
+          <div style="flex:1;height:16px;background:#1a1a2e;border-radius:3px;position:relative;overflow:hidden">
+            <div id="bar-y" style="position:absolute;top:0;height:100%;background:#ffd600;border-radius:3px;transition:left 0.1s,width 0.1s;left:50%;width:0"></div>
+            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#444"></div>
+          </div>
+          <span id="val-y" style="font-size:9px;color:#ffd600;width:36px;text-align:right;font-family:monospace">0.00</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:10px;color:#76ff03;width:14px;text-align:right;font-weight:bold">Z</span>
+          <div style="flex:1;height:16px;background:#1a1a2e;border-radius:3px;position:relative;overflow:hidden">
+            <div id="bar-z" style="position:absolute;top:0;height:100%;background:#76ff03;border-radius:3px;transition:left 0.1s,width 0.1s;left:50%;width:0"></div>
+            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#444"></div>
+          </div>
+          <span id="val-z" style="font-size:9px;color:#76ff03;width:36px;text-align:right;font-family:monospace">1.00</span>
+        </div>
+        <span style="font-size:8px;color:var(--muted);text-align:center" data-i18n="dbg.gyro_accel">Lage (G)</span>
+      </div>
+      <div style="flex:0 0 180px;display:flex;flex-direction:column;gap:4px;justify-content:center">
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:9px;color:#ff4081;width:22px;text-align:right;font-weight:bold">YAW</span>
+          <div style="flex:1;height:16px;background:#1a1a2e;border-radius:3px;position:relative;overflow:hidden">
+            <div id="bar-gz" style="position:absolute;top:0;height:100%;background:#ff4081;border-radius:3px;transition:left 0.1s,width 0.1s;left:50%;width:0"></div>
+            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#444"></div>
+          </div>
+          <span id="val-gz" style="font-size:9px;color:#ff4081;width:36px;text-align:right;font-family:monospace">0</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:9px;color:#ea80fc;width:22px;text-align:right;font-weight:bold">PIT</span>
+          <div style="flex:1;height:16px;background:#1a1a2e;border-radius:3px;position:relative;overflow:hidden">
+            <div id="bar-gx" style="position:absolute;top:0;height:100%;background:#ea80fc;border-radius:3px;transition:left 0.1s,width 0.1s;left:50%;width:0"></div>
+            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#444"></div>
+          </div>
+          <span id="val-gx" style="font-size:9px;color:#ea80fc;width:36px;text-align:right;font-family:monospace">0</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:9px;color:#b388ff;width:22px;text-align:right;font-weight:bold">ROL</span>
+          <div style="flex:1;height:16px;background:#1a1a2e;border-radius:3px;position:relative;overflow:hidden">
+            <div id="bar-gy" style="position:absolute;top:0;height:100%;background:#b388ff;border-radius:3px;transition:left 0.1s,width 0.1s;left:50%;width:0"></div>
+            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#444"></div>
+          </div>
+          <span id="val-gy" style="font-size:9px;color:#b388ff;width:36px;text-align:right;font-family:monospace">0</span>
+        </div>
+        <span style="font-size:8px;color:var(--muted);text-align:center" data-i18n="dbg.gyro_rate">Drehrate (&deg;/s)</span>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn accent" id="btn-cal" style="font-size:10px;padding:3px 12px" onclick="gyroCalibrate()" data-i18n="dbg.gyro_cal">Baseline kalibrieren</button>
+      <span id="cal-status" style="font-size:10px;color:var(--muted)" data-i18n="dbg.gyro_cal_hint">Board ruhig aufstellen, dann kalibrieren (~3s)</span>
+    </div>
+  </div>
+
+  <!-- Kompass (nur sichtbar wenn mod_compass=1) -->
+  <div id="sec-compass" style="display:none">
+  <div class="section-title">Kompass (QMC5883L)</div>
+  <div class="card" style="padding:16px 20px">
+    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+      <div style="flex-shrink:0">
+        <canvas id="compass-canvas" width="110" height="110"></canvas>
+      </div>
+      <div style="flex:1;min-width:120px">
+        <div style="margin-bottom:8px">
+          <div class="lbl">Richtung</div>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span id="compass-deg" style="font-size:28px;font-weight:700;color:var(--accent);letter-spacing:2px">---</span>
+            <span style="font-size:14px;color:var(--muted)">&deg;</span>
+            <span id="compass-cardinal" style="font-size:18px;font-weight:700;color:var(--orange);min-width:30px">--</span>
+          </div>
+        </div>
+        <div id="compass-status" style="font-size:10px;color:var(--muted)">Warte auf Sensor...</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <div class="lbl" style="margin-bottom:6px">Automatische Kalibrierung</div>
+      <div id="compass-cal-info" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
+      <button onclick="compassCalReset()" style="padding:5px 10px;font-size:11px;opacity:0.7">Kalibrierung zur&uuml;cksetzen</button>
+    </div>
+  </div>
+  </div>
+
+  <!-- WiFi Umgebung -->
+  <div class="section-title" data-i18n="dbg.wifi_title">Netzwerke in Reichweite</div>
+  <div class="card">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px" data-i18n="dbg.wifi_subtitle">Letzter automatischer Scan (alle 15s, nur wenn kein Client verbunden)</div>
+    <div id="wifi-list"><div style="color:var(--muted);font-size:12px" data-i18n="dbg.wifi_loading">Lade...</div></div>
+  </div>
+
+  <!-- ELM Log (nur sichtbar wenn log_can aktiv) -->
+  <div id="sec-elm-log" style="display:none">
+  <div class="section-title" style="margin-top:16px" data-i18n="dbg.elm_title">ELM327 / ABRP Log
+    <button class="btn danger" style="margin-left:auto;font-size:10px;padding:2px 10px" onclick="clearElmLog()" data-i18n="dbg.elm_delete">&#10005; L&#246;schen</button>
+    <a href="/download-elm-log" class="btn" style="border-color:var(--green);color:var(--green);font-size:10px;padding:2px 10px;text-decoration:none">&darr; elm.log</a>
+  </div>
+  <div class="log-box" id="elm-log" style="white-space:pre">Lade...</div>
+  </div>
+
+  <!-- MQTT Puffer -->
+  <div class="section-title" style="margin-top:16px" data-i18n="dbg.mqtt_title">MQTT Puffer
+    <span id="mqtt-count" style="margin-left:auto;font-size:11px;color:var(--muted)">--</span>
+  </div>
+  <div style="font-size:10px;color:var(--muted);margin-bottom:6px">
+    <span data-i18n="dbg.mqtt_desc">Gepufferte Zeilen (GPS-getriggert) &#183; werden sofort per MQTT gepublisht</span>
+  </div>
+  <div class="log-box" id="mqtt-preview" style="max-height:180px;white-space:pre">Lade...</div>
+
+  <!-- System Log -->
+  <div class="section-title" style="margin-top:16px" data-i18n="dbg.syslog_title">System Log
+    <button class="btn danger" style="margin-left:auto;font-size:10px;padding:2px 10px" onclick="clearSysLog()">&#x2715; L&ouml;schen</button>
+    <a href="/download-sys-log" class="btn" style="border-color:var(--orange);color:var(--orange);font-size:10px;padding:2px 10px;text-decoration:none;white-space:nowrap" download>&#x2193; sys.log</a>
+  </div>
+  <div style="font-size:10px;color:var(--muted);margin-bottom:6px">
+    <span data-i18n="dbg.syslog_desc">Neustarts &bull; Client-Events &bull; Zeit-Events</span>
+  </div>
+  <div class="log-box" id="sys-log" style="max-height:400px;white-space:pre">Lade...</div>
+
+</div>
+
+<div class="section-title" data-i18n="dbg.system_title">SYSTEM</div>
+<div class="card" style="display:flex;align-items:center;gap:12px">
+  <button class="btn danger" onclick="doRestart()" data-i18n="dbg.restart">Neustart</button>
+  <span style="font-size:10px;color:var(--muted)" data-i18n="dbg.restart_hint">ESP32 neu starten (Firmware bleibt erhalten)</span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/common.js"></script>
+<script src="/i18n.js"></script>
+<script>
+// ── Status Polling ────────────────────────────────────────
+async function fetchStatus(){try{var d=await(await fetch('/status')).json();if(d.fw_version){var v=document.getElementById('fw-ver');if(v)v.textContent='v'+d.fw_version;}setLed('can',d.can_ok?'green':'blue');if(!d.gyro_ok)setLed('gyro','');else setLed('gyro',d.gyro_state===2?'yellow':'green');setLed('gps',d.gps_valid?'green':'');if(d.gyro_threshold!=null){gThr=d.gyro_threshold;var inp=document.getElementById('gyro-thr-input');if(inp)inp.value=gThr.toFixed(3);}
+if(d.gyro_mot_thr!=null){var inp2=document.getElementById('gyro-mot-input');if(inp2){inp2.value=d.gyro_mot_thr;var lbl=document.getElementById('gyro-mot-mg');if(lbl)lbl.textContent='\u00d7 32 = '+(d.gyro_mot_thr*32)+'mg';}}setBatt(d.batt_pct??-1,d.charging??false,d.vbus_in??false);updateModem(d.modem_sig??-1,d.modem_op??'',d.modem_sim??false,d.modem_ok??false);compassUpdate(d);}catch(e){}}
+fetchStatus();
+var _stTimer=setInterval(fetchStatus,6000);
+
+// ── Restart ───────────────────────────────────────────────
+async function doRestart(){
+  if(!confirm(t('dbg.restart_confirm')))return;
+  try{await fetch('/api/restart',{method:'POST'});toast(t('dbg.restart_toast'));}catch(_){toast(t('dbg.restart_err'),false);}
+}
+
+// ── RTC Zeit vom ESP holen und anzeigen ───────────────────
+var rtcOffset = null;
+var rtcFetchedAt = null;
+
+async function loadRtcTime() {
+  var el   = document.getElementById('rtc-display');
+  var stEl = document.getElementById('rtc-status');
+  var okEl = document.getElementById('rtc-ok-badge');
+  try {
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
+    var d = await (await fetch('/status', {signal: ctrl.signal})).json();
+    clearTimeout(tid);
+
+    if (d.rtc_ok && d.rtc_time && d.rtc_time !== '--:--:--') {
+      var parts = d.rtc_time.split(':').map(Number);
+      var nowMs = Date.now();
+      rtcOffset = (parts[0]*3600 + parts[1]*60 + parts[2]) * 1000 - (nowMs % 86400000);
+      rtcFetchedAt = nowMs;
+      okEl.innerHTML = '<span style="color:var(--green)">' + t('dbg.rtc_running') + '</span>';
+      stEl.textContent = t('dbg.rtc_stored');
+      var dateEl = document.getElementById('rtc-date-display');
+      if (d.rtc_date) {
+        var dp = d.rtc_date.split('-');
+        dateEl.textContent = dp[2] + '.' + dp[1] + '.' + dp[0];
+        dateEl.style.color = 'var(--accent)';
+      } else {
+        dateEl.textContent = t('dbg.rtc_date_unset');
+        dateEl.style.color = 'var(--red)';
+      }
+    } else if (!d.rtc_ok) {
+      rtcOffset = null;
+      okEl.innerHTML = '<span style="color:var(--red)">' + t('dbg.rtc_stopped') + '</span>';
+      stEl.textContent = t('dbg.rtc_auto_browser');
+      el.style.color = 'var(--red)';
+      var n = new Date();
+      fetch('/wifi/set-time', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({year:n.getUTCFullYear(), month:n.getUTCMonth()+1, day:n.getUTCDate(), hour:n.getUTCHours(), minute:n.getUTCMinutes(), second:n.getUTCSeconds()})
+      }).then(function(){ setTimeout(loadRtcTime, 500); });
+    } else {
+      okEl.innerHTML = '<span style="color:var(--muted)">' + t('dbg.rtc_not_found') + '</span>';
+      stEl.textContent = t('dbg.rtc_check_wiring');
+      el.textContent = '--:--:--';
+    }
+  } catch(e) {
+    stEl.textContent = t('dbg.conn_err_short') || 'Verbindungsfehler';
+    el.textContent = '--:--:--';
+  }
+}
+
+setInterval(function() {
+  var el = document.getElementById('rtc-display');
+  if (rtcOffset === null) return;
+  var totalSec = Math.floor((Date.now() % 86400000 + rtcOffset) / 1000 + 86400) % 86400;
+  var h = Math.floor(totalSec / 3600);
+  var m = Math.floor((totalSec % 3600) / 60);
+  var s = totalSec % 60;
+  var fmt = function(n){ return String(n).padStart(2,'0'); };
+  el.textContent = fmt(h) + ':' + fmt(m) + ':' + fmt(s);
+  el.style.color = 'var(--accent)';
+}, 1000);
+
+// ── Manuelle Zeiteinstellung ──────────────────────────────
+function prefillBrowserTime() {
+  var now = new Date();
+  document.getElementById('set-date').value = now.getUTCFullYear() + '-' + String(now.getUTCMonth()+1).padStart(2,'0') + '-' + String(now.getUTCDate()).padStart(2,'0');
+  document.getElementById('set-hour').value = now.getUTCHours();
+  document.getElementById('set-min').value  = now.getUTCMinutes();
+  document.getElementById('set-sec').value  = now.getUTCSeconds();
+}
+
+async function setRtcTime() {
+  var h = parseInt(document.getElementById('set-hour').value);
+  var m = parseInt(document.getElementById('set-min').value);
+  var s = parseInt(document.getElementById('set-sec').value) || 0;
+  var dateVal = document.getElementById('set-date').value;
+  var dp = dateVal ? dateVal.split('-').map(Number) : [];
+  var yr = dp[0] || new Date().getUTCFullYear();
+  var mo = dp[1] || new Date().getUTCMonth()+1;
+  var dy = dp[2] || new Date().getUTCDate();
+
+  if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) {
+    toast(t('dbg.rtc_invalid'), false);
+    return;
+  }
+  try {
+    var r = await fetch('/wifi/set-time', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({year: yr, month: mo, day: dy, hour: h, minute: m, second: s})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('\u2713 ' + String(dy).padStart(2,'0') + '.' + String(mo).padStart(2,'0') + '.' + yr + ' ' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+      await loadRtcTime();
+    } else {
+      toast(t('dbg.rtc_set_err'), false);
+    }
+  } catch(e) {
+    toast(t('dbg.conn_err'), false);
+  }
+}
+
+// ── WiFi Scan ─────────────────────────────────────────────
+async function loadWifiResult() {
+  try {
+    var d = await (await fetch('/wifi/scan-result')).json();
+    if (d.status === 'running' || !d.networks || d.status !== 'done') return;
+    renderWifiNets(d.networks);
+  } catch(e) { console.error(e); }
+}
+
+function renderWifiNets(nets) {
+  nets.sort(function(a,b){ return b.rssi - a.rssi; });
+  var container = document.getElementById('wifi-list');
+  if (nets.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px">' + t('dbg.wifi_empty') + '</div>';
+    return;
+  }
+  // FIXES B.13: Nachbar-SSID ungeescaped ins innerHTML war ein DOM-XSS-Vektor
+  // (SSID '<img src=x onerror=…>' führt JS im Browser des Besitzers aus).
+  var escW = function(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  container.innerHTML = nets.map(function(net) {
+    var pct = Math.max(4, Math.min(44, (net.rssi + 100) * 0.88));
+    var col = net.rssi > -55 ? 'var(--green)' : net.rssi > -72 ? 'var(--orange)' : 'var(--red)';
+    return '<div class="wifi-net">' +
+      '<div class="wifi-bar" style="width:' + pct + 'px;background:' + col + '"></div>' +
+      '<div class="wifi-ssid">' + (net.ssid ? escW(net.ssid) : t('dbg.wifi_hidden')) + '</div>' +
+      '<div class="wifi-meta">' + net.rssi + ' dBm<br>' + net.dist + ' &middot; ch' + net.channel + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+// ── ELM Log ───────────────────────────────────────────────
+async function loadElmLog() {
+  try {
+    var r = await fetch('/download-elm-log');
+    var txt = await r.text();
+    var el = document.getElementById('elm-log');
+    var lines = txt.trim().split('\n').slice(-30).reverse();
+    var escE = function(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    el.innerHTML = lines.map(function(l){ return '<span>' + escE(l) + '</span>\n'; }).join('') || t('dbg.elm_empty');
+  } catch(e) {}
+}
+
+async function clearElmLog() {
+  if (!confirm(t('dbg.elm_confirm'))) return;
+  var r = await fetch('/clear-elm-log', {method:'POST'});
+  var d = await r.json();
+  toast(d.ok ? t('dbg.elm_deleted') : t('dbg.elm_err'), d.ok);
+  loadElmLog();
+}
+
+// ── System Log ────────────────────────────────────────────
+async function loadSysLog() {
+  var el = document.getElementById('sys-log');
+  try {
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
+    var r = await fetch('/download-sys-log', {signal: ctrl.signal});
+    clearTimeout(tid);
+    var txt = await r.text();
+    if (!txt.trim() || txt.startsWith('# Sys')) { el.textContent = window.t('dbg.syslog_empty'); return; }
+    var lines = txt.trim().split('\n').slice(-60);
+    var esc = function(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    el.innerHTML = lines.map(function(l) {
+      var col = (l.includes('PANIC') || l.includes('CRASH') || l.includes('WDT')) ? 'var(--red)'
+              : l.includes('FEHLER') || l.includes('GPS-Fix verloren') || l.includes('Fehler HTTP') ? 'var(--red)'
+              : (l.includes('ERSTER GPS-FIX') || l.includes('GPS-Fix wieder'))   ? 'var(--green)'
+              : l.includes('LTE-M verbunden') || l.includes('GPRS OK')           ? 'var(--green)'
+              : l.includes('OK')                                                  ? 'var(--green)'
+              : l.includes('gesendet')                                            ? 'var(--yellow)'
+              : l.includes('GPS gestoppt')                                        ? 'var(--orange)'
+              : l.includes('!!!! GPS-Capture')                                      ? '#ff79c6'
+              : l.includes('MQTT')                                                ? '#ff79c6'
+              : l.includes('AKKU')                                                ? '#ff79c6'
+              : l.includes('WAKE')                                                ? 'var(--accent)'
+              : (l.includes('SLEEP') || l.includes('pausiert'))                  ? 'var(--yellow)'
+              : l.includes('BOOT')                                                ? 'var(--orange)'
+              : l.includes('CLIENT')                                              ? 'var(--accent)'
+              : '';
+      return col ? '<span style="color:' + col + '">' + esc(l) + '</span>\n' : '<span>' + esc(l) + '</span>\n';
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {
+    if (el && el.textContent.includes('Lade')) el.textContent = window.t('dbg.conn_err_short') || 'Verbindungsfehler';
+  }
+}
+
+async function clearSysLog() {
+  if (!confirm(t('dbg.syslog_confirm'))) return;
+  await fetch('/clear-sys-log', {method:'POST'});
+  toast(t('dbg.syslog_deleted'));
+  loadSysLog();
+}
+
+// ── Gyro Schreiber ────────────────────────────────────────
+var GBUF = 300;
+var gBuf  = new Float32Array(GBUF);
+var gHead = 0, gPeak = 0, gWs = null;
+var gThr  = 0.030;
+
+function gyroPeakReset() { gPeak = 0; document.getElementById('gyro-peak').textContent = '--'; }
+
+async function gyroCalibrate() {
+  var btn = document.getElementById('btn-cal');
+  var st  = document.getElementById('cal-status');
+  btn.disabled = true;
+  st.style.color = 'var(--muted)';
+  st.textContent = t('dbg.gyro_cal_measuring');
+  try {
+    var d = await (await fetch('/api/gyro/calibrate', {method:'POST'})).json();
+    if (d.ok) {
+      st.style.color = 'var(--green)';
+      st.textContent = t('dbg.gyro_cal_ok_detail', [parseFloat(d.baseline).toFixed(4), parseFloat(d.stddev).toFixed(4)]);
+      toast(t('dbg.gyro_cal_ok', [parseFloat(d.baseline).toFixed(4)]));
+    } else {
+      st.style.color = 'var(--red)';
+      st.textContent = t('dbg.gyro_cal_fail', [parseFloat(d.stddev).toFixed(4)]);
+      toast(t('dbg.gyro_cal_fail_toast'), false);
+    }
+  } catch(e) {
+    st.style.color = 'var(--red)';
+    st.textContent = t('dbg.conn_err_short');
+    toast(t('dbg.conn_err'), false);
+  }
+  btn.disabled = false;
+}
+
+async function gyroSetMotThreshold() {
+  var inp = document.getElementById('gyro-mot-input');
+  var v = parseInt(inp.value);
+  if (isNaN(v) || v < 1 || v > 255) { inp.style.borderColor='#ff4757'; return; }
+  inp.style.borderColor = '';
+  var r = await fetch('/gyro/set-mot-threshold', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({value: v})
+  });
+  if ((await r.json()).ok) {
+    var lbl = document.getElementById('gyro-mot-mg');
+    if (lbl) lbl.textContent = '\u00d7 32 = ' + (v * 32) + 'mg';
+  }
+}
+
+async function gyroSetThreshold() {
+  var inp = document.getElementById('gyro-thr-input');
+  var v = parseFloat(inp.value);
+  if (isNaN(v) || v < 0.005 || v > 1.0) { inp.style.borderColor='#ff4757'; return; }
+  inp.style.borderColor = '';
+  var r = await fetch('/gyro/set-threshold', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({threshold: v})
+  });
+  if ((await r.json()).ok) { gThr = v; }
+}
+
+function gyroPush(v) {
+  gBuf[gHead % GBUF] = v;
+  gHead++;
+  if (v > gPeak) gPeak = v;
+  document.getElementById('gyro-val').textContent  = v.toFixed(4) + 'G';
+  document.getElementById('gyro-peak').textContent = gPeak.toFixed(4) + 'G';
+}
+
+function gyroDraw() {
+  var canvas = document.getElementById('gyro-canvas');
+  if (!canvas) return;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var W = canvas.offsetWidth, H = canvas.offsetHeight;
+  if (!W || !H) return;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  ctx.fillStyle = '#1c2733';
+  ctx.fillRect(0, 0, W, H);
+
+  var THR  = gThr;
+  var yMax = Math.max(0.12, gPeak * 1.25, THR * 4);
+  var toY  = function(v){ return H - 2 - (v / yMax) * (H - 5); };
+
+  ctx.strokeStyle = '#2a3a4a'; ctx.lineWidth = 1;
+  ctx.font = '8px monospace'; ctx.fillStyle = '#5a7a96';
+  for (var g = 0.05; g < yMax + 0.001; g += 0.05) {
+    var y = Math.round(toY(g)) + 0.5;
+    if (y < 2 || y > H - 2) continue;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.fillText(g.toFixed(2) + 'G', 2, y - 2);
+  }
+
+  [1/3, 2/3].forEach(function(f) {
+    var x = Math.round(W * f) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  });
+
+  var tY = Math.round(toY(THR)) + 0.5;
+  ctx.strokeStyle = '#ffd166'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, tY); ctx.lineTo(W, tY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  var step = W / (GBUF - 1);
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (var i = 0; i < GBUF; i++) {
+    ctx.lineTo(i * step, toY(gBuf[(gHead + i) % GBUF]));
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(0,229,255,0.09)';
+  ctx.fill();
+
+  ctx.beginPath();
+  for (var j = 0; j < GBUF; j++) {
+    var x2 = j * step, y2 = toY(gBuf[(gHead + j) % GBUF]);
+    if (j === 0) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2);
+  }
+  ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function gyroWsConnect() {
+  if (gWs && gWs.readyState < 2) return;
+  gWs = new WebSocket('ws://' + location.host + '/ws');
+  gWs.onmessage = function(e) {
+    try {
+      var d = JSON.parse(e.data);
+      if (d.type === 'gyro_g') {
+        gyroPush(d.g); gyroDraw();
+        if (d.ax != null) axisUpdate(d.ax, d.ay, d.az, d.gx, d.gy, d.gz);
+      }
+      if (d.type === 'gyro' && d.state !== undefined)
+        setLed('gyro', d.state === 2 ? 'yellow' : d.state === 1 ? 'green' : '');
+    } catch(_) {}
+  };
+  gWs.onerror = function(){};
+  gWs.onclose = function(){ setTimeout(gyroWsConnect, 3000); };
+}
+
+// ── Gyro Achsen-Balken ────────────────────────────────────
+function setBar(id,valId,v,range,decimals) {
+  var bar=document.getElementById(id), ve=document.getElementById(valId);
+  if(!bar) return;
+  var clamped = Math.max(-range, Math.min(range, v));
+  var pct = (clamped / range) * 50;
+  if(pct >= 0) { bar.style.left='50%'; bar.style.width=pct+'%'; }
+  else { bar.style.left=(50+pct)+'%'; bar.style.width=(-pct)+'%'; }
+  if(ve) ve.textContent=v.toFixed(decimals);
+}
+function axisUpdate(ax,ay,az,gx,gy,gz) {
+  setBar('bar-x','val-x',ax,2,2);
+  setBar('bar-y','val-y',ay,2,2);
+  setBar('bar-z','val-z',az,2,2);
+  if(gx!=null) {
+    setBar('bar-gx','val-gx',gx,250,0);
+    setBar('bar-gy','val-gy',gy,250,0);
+    setBar('bar-gz','val-gz',gz,250,0);
+  }
+}
+
+// ── Kompass ───────────────────────────────────────────────
+function compassDraw(deg) {
+  var canvas = document.getElementById('compass-canvas');
+  if (!canvas) return;
+  var W = canvas.width, H = canvas.height;
+  var cx = W/2, cy = H/2, r = W/2 - 6;
+  var ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.fillStyle = '#1c2733';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#2a3a4a'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+
+  for (var i = 0; i < 36; i++) {
+    var a = (i * 10 - 90) * Math.PI / 180;
+    var len = (i % 9 === 0) ? 10 : (i % 3 === 0) ? 6 : 3;
+    var x1 = cx + Math.cos(a) * (r - 1), y1 = cy + Math.sin(a) * (r - 1);
+    var x2 = cx + Math.cos(a) * (r - len), y2 = cy + Math.sin(a) * (r - len);
+    ctx.strokeStyle = (i % 9 === 0) ? '#5a7a96' : '#2a3a4a';
+    ctx.lineWidth = (i % 9 === 0) ? 1.5 : 1;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  var dirs = [['N', 0, '#ff4757'], ['O', 90, '#5a7a96'], ['S', 180, '#5a7a96'], ['W', 270, '#5a7a96']];
+  dirs.forEach(function(d) {
+    var a2 = (d[1] - 90) * Math.PI / 180;
+    var tx = cx + Math.cos(a2) * (r - 16), ty = cy + Math.sin(a2) * (r - 16);
+    ctx.fillStyle = d[2]; ctx.fillText(d[0], tx, ty);
+  });
+
+  var rad = (deg - 90) * Math.PI / 180;
+  var tipLen = r - 20, tailLen = 16;
+  var tipX = cx + Math.cos(rad) * tipLen, tipY = cy + Math.sin(rad) * tipLen;
+  var bx = cx - Math.cos(rad) * tailLen, by = cy - Math.sin(rad) * tailLen;
+  var px = Math.cos(rad + Math.PI/2) * 5, py = Math.sin(rad + Math.PI/2) * 5;
+
+  ctx.fillStyle = '#ff4757';
+  ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(cx+px, cy+py); ctx.lineTo(cx-px, cy-py); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#2a3a4a';
+  ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(cx+px, cy+py); ctx.lineTo(cx-px, cy-py); ctx.closePath(); ctx.fill();
+
+  ctx.fillStyle = '#00e5ff';
+  ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI*2); ctx.fill();
+}
+
+function compassCardinal(deg) {
+  var dirs = ['N','NO','O','SO','S','SW','W','NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function compassUpdate(d) {
+  var sec = document.getElementById('sec-compass');
+  if (!d.compass_ok) { if (sec) sec.style.display = 'none'; return; }
+  if (sec) sec.style.display = '';
+  var heading = d.compass_heading || 0;
+  var degEl = document.getElementById('compass-deg');
+  var carEl = document.getElementById('compass-cardinal');
+  var stEl  = document.getElementById('compass-status');
+  if (degEl) degEl.textContent = Math.round(heading);
+  if (carEl) carEl.textContent = compassCardinal(heading);
+
+  var hiOk      = d.compass_hi_ok     || false;
+  var drvOff    = d.compass_drv_off   != null ? d.compass_drv_off.toFixed(1) : '0.0';
+  var infoEl    = document.getElementById('compass-cal-info');
+  if (stEl) stEl.textContent = 'QMC5883L \u00b7 Echtzeit \u00b7 automatische Kalibrierung';
+  if (infoEl) {
+    var hiTxt  = hiOk ? '\u2713 Hard-Iron OK' : '\u23f3 Hard-Iron l\u00e4uft (mehr Kurven fahren)';
+    var drvTxt = 'Fahrtrichtungs-Offset: ' + drvOff + '\u00b0';
+    infoEl.textContent = hiTxt + '  \u00b7  ' + drvTxt;
+  }
+  compassDraw(heading);
+}
+
+async function compassCalReset() {
+  if (!confirm('Kalibrierung wirklich zur\u00fccksetzen?')) return;
+  await fetch('/api/compass/cal-reset', {method:'POST'});
+}
+
+// ── MQTT Puffer Preview ──────────────────────────────────
+async function loadMqttPreview() {
+  var el  = document.getElementById('mqtt-preview');
+  var cnt = document.getElementById('mqtt-count');
+  try {
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
+    var results = await Promise.all([
+      fetch('/api/row-preview', {signal: ctrl.signal}).then(function(r){return r.text();}),
+      fetch('/api/telemetry', {signal: ctrl.signal}).then(function(r){return r.json();})
+    ]);
+    clearTimeout(tid);
+    var prev = results[0], telem = results[1];
+    cnt.textContent = t('dbg.mqtt_pending', [telem.row_pending||0]);
+    if (!prev.trim() || prev.startsWith('Keine')) {
+      el.textContent = t('dbg.mqtt_no_gps');
+    } else {
+      var escI = function(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+      el.innerHTML = prev.trim().split('\n').map(function(l) {
+        return '<span>' + escI(l) + '</span>\n';
+      }).join('');
+    }
+  } catch(e) {
+    if (el && el.textContent.includes('Lade')) el.textContent = t('dbg.conn_err_short') || 'Verbindungsfehler';
+  }
+}
+
+// ── Log-Sektionen ein/ausblenden je Config ────────────────
+var _logCan=false;
+var _tiEl=null;
+
+async function loadLogConfig() {
+  try {
+    var d = await (await fetch('/api/config')).json();
+    _logCan = d.log_can === true;
+    document.getElementById('sec-elm-log').style.display = _logCan ? '' : 'none';
+    if (_logCan && !_tiEl)  { loadElmLog();  _tiEl = setInterval(loadElmLog, 15000); }
+  } catch(e) {}
+}
+
+// ── Init (gestaffelt) ─────────────────────────────────────
+loadRtcTime();
+setTimeout(function(){ loadWifiResult(); loadLogConfig(); }, 1500);
+setTimeout(function(){ loadSysLog(); }, 3000);
+setTimeout(function(){ loadMqttPreview(); }, 4500);
+var _tiRtc=setInterval(loadRtcTime,30000);
+var _tiWr=setInterval(loadWifiResult,20000);
+var _tiSl=setInterval(loadSysLog,20000);
+var _tiIx=setInterval(loadMqttPreview,10000);
+
+window.destroyPage=function(){[_stTimer,_tiRtc,_tiWr,_tiEl,_tiSl,_tiIx].forEach(function(t){if(t)clearInterval(t);});if(typeof gWs!=='undefined'&&gWs){gWs.onclose=null;gWs.close();gWs=null;}};
+
+gyroWsConnect();
+requestAnimationFrame(gyroDraw);
+</script>
+</body>
+</html>

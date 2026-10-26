@@ -1,0 +1,71 @@
+' Shared GitHub-friendly PlantUML theme for IDTelemetry.
+' Include via:  !include _theme.puml
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 12
+skinparam defaultFontColor #1F2328
+skinparam componentStyle rectangle
+
+' GitHub-style strokes
+skinparam ArrowColor #57606A
+skinparam ArrowFontColor #57606A
+skinparam ArrowFontSize 11
+
+' Component / package borders + fills (GitHub neutral grays)
+skinparam component {
+    BackgroundColor #FFFFFF
+    BorderColor #D0D7DE
+    FontColor #1F2328
+}
+skinparam package {
+    BackgroundColor #F6F8FA
+    BorderColor #D0D7DE
+    FontColor #1F2328
+    FontStyle bold
+}
+skinparam database {
+    BackgroundColor #DDF4FF
+    BorderColor #54AEFF
+    FontColor #0969DA
+}
+skinparam cloud {
+    BackgroundColor #FFF8C5
+    BorderColor #D4A72C
+    FontColor #1F2328
+}
+skinparam node {
+    BackgroundColor #F6F8FA
+    BorderColor #D0D7DE
+}
+
+' Title styling
+skinparam TitleFontSize 14
+skinparam TitleFontColor #1F2328
+
+' Note styling (annotations)
+skinparam note {
+    BackgroundColor #FFF8C5
+    BorderColor #D4A72C
+}
+
+' State diagrams
+skinparam state {
+    BackgroundColor #F6F8FA
+    BorderColor #D0D7DE
+    FontColor #1F2328
+    AttributeFontColor #57606A
+    AttributeFontSize 10
+}
+
+' Activity / sequence
+skinparam sequence {
+    ArrowColor #57606A
+    LifeLineBorderColor #D0D7DE
+    LifeLineBackgroundColor #F6F8FA
+    ParticipantBackgroundColor #FFFFFF
+    ParticipantBorderColor #D0D7DE
+    BoxBackgroundColor #F6F8FA
+    BoxBorderColor #D0D7DE
+}

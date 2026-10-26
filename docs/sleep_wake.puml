@@ -1,0 +1,43 @@
+@startuml sleep_wake
+!include _theme.puml
+
+title Sleep / Wake — Power States
+
+[*] --> Boot
+
+state Boot {
+  [*] --> InitHardware : esp_restart / power-on
+  InitHardware : modem, GPS, PMU, RTC, gyro
+  InitHardware --> Running
+}
+
+state Running #DDF4FF {
+  Running : telemetry @ 3 s tick
+  Running : MQTT push on row capture
+  Running : PMU update @ 10 s
+  Running : modem watchdog
+}
+
+state DeepSleep #FFF8C5 {
+  DeepSleep : ESP32-S3 in deep sleep (~uA)
+  DeepSleep : M10 GPS in idle (~5 mA)
+  DeepSleep : SIM7080G powered off
+  DeepSleep : RTC + AXP2101 awake
+}
+
+Running --> PreSleep : no motion 5 min\n+ no VBUS\n(3x debounce)
+state PreSleep {
+  PreSleep : final telemetry batch
+  PreSleep : flush SPIFFS queue
+  PreSleep : modem_pre_sleep_flush()
+  PreSleep : modem_poweroff()
+}
+PreSleep --> DeepSleep
+
+DeepSleep --> Boot : MPU-6050 INT (motion)\nGPIO3 EXT0
+DeepSleep --> Boot : VBUS insert\nGPIO6 (PMU IRQ)
+DeepSleep --> Boot : RTC alarm (optional)
+
+Running --> Running : VBUS gone but moving\n(do not sleep)
+
+@enduml
