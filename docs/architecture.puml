@@ -22,7 +22,7 @@ package "IDTelemetry Stick" {
 
   [SN65HVD230\nCAN transceiver] as TRX
   [SIM7080G\nLTE-M / NB-IoT] as SIM
-  [BLITZ Mini M10\nu-blox GNSS] as M10
+  [u-blox DAN-F10N\nL1+L5 GNSS] as GNSS
   [DS1307\nRTC] as RTC
   [MPU-6050\nGyro / Accel] as IMU
   [AXP2101\nPMU] as PMU
@@ -42,13 +42,13 @@ package "Smartphone" {
 OBD --> TRX : CAN-H/L
 TRX --> CAN
 ModemUART --> SIM
-GpsUART <-- M10
+GpsUART <-- GNSS
 I2C0 -- RTC
 I2C0 -- IMU
 I2C1 -- PMU
 PMU -- BAT
 PMU -- SIM : DC rails
-PMU -- M10 : DC5
+PMU -- GNSS : DC5
 
 CAN --> STORE : telemetry rows
 STORE ..> SIM : publish

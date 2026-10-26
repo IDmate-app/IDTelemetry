@@ -41,7 +41,7 @@ static char s_sta_ssid_2  [64]  = "";
 static char s_sta_pass_2  [64]  = "";
 static char s_upload_url_2[128] = "";
 static bool s_ble_standby     = false;  // Default: aus
-// GPS source selector: "ext" (BLITZ M10), "int" (SIM7080G), "off".
+// GPS source selector: "ext" (u-blox DAN-F10N), "int" (SIM7080G), "off".
 // Default ext — that's what the codebase actually uses since v1.1.
 static char s_gps_src[8] = "ext";
 static bool s_mod_gps         = true;   // Default: GPS vorhanden

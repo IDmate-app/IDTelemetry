@@ -169,10 +169,25 @@ bool mqtt_is_connected() {
         s_connected = false;
         return false;
     }
-    // Antwort: +SMSTATE: 0 oder +SMSTATE: 1
-    // FIXES B.17: gegen "+SMSTATE: 1" matchen, nicht gegen irgendeine '1' —
-    // sonst matcht jede '1' in URCs/Echos → falsch-positives "connected".
-    s_connected = (resp.indexOf("+SMSTATE: 1") >= 0);
+    // Antwort: "+SMSTATE: 0" oder "+SMSTATE: 1".
+    // Frueher stand hier resp.indexOf("1") >= 0 — das trifft jede Ziffer 1
+    // irgendwo in der Antwort. waitResponse(..., String&) sammelt aber alles bis
+    // zum abschliessenden OK, auch URCs, die der SIM7080-Parser nicht selbst
+    // herausfiltert. configure_radio() schaltet +CEREG=2 ein, jede Zellumwahl
+    // liefert also z.B. +CEREG: 2,1,"1A2B",... — und schon meldet das Geraet
+    // sich als verbunden, obwohl es das nicht ist.
+    //
+    // Gezielt die Ziffer hinter "+SMSTATE:" lesen. Leerzeichen werden dabei
+    // uebersprungen, damit die Pruefung nicht an der Formatierung haengt: das
+    // Geraet antwortet mit Leerzeichen ("+SMSTATE: 1"), die AT-Spezifikation
+    // laesst es aber offen.
+    s_connected = false;
+    int at = resp.indexOf("+SMSTATE:");
+    if (at >= 0) {
+        int j = at + 9;                       // hinter "+SMSTATE:"
+        while (j < (int)resp.length() && (resp[j] == ' ' || resp[j] == '\t')) j++;
+        s_connected = (j < (int)resp.length() && resp[j] == '1');
+    }
     return s_connected;
 }
 

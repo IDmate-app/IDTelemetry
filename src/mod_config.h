@@ -57,7 +57,7 @@ const char* cfg_sta_ssid_2();      // slot 2
 const char* cfg_sta_pass_2();
 const char* cfg_upload_url_2();    // HTTP(S) endpoint for slot 2
 
-// GPS source: "ext" (default, BLITZ M10), "int" (SIM7080G GNSS), "off"
+// GPS source: "ext" (default, u-blox DAN-F10N), "int" (SIM7080G GNSS), "off"
 const char* cfg_gps_src();
 
 // BLE Standby-Defaults (ABRP bekommt Werte auch ohne CAN)

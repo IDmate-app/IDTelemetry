@@ -238,8 +238,30 @@ static void row_try_capture() {
     if (!do_capture) { xSemaphoreGive(s_capture_mtx); return; }
 
     // RTC-Zeitstempel erforderlich (InfluxDB braucht gültigen Timestamp)
+    // Ohne gültiges Datum wurde hier bisher STUMM zurückgekehrt — kein Log, kein
+    // Zähler. Das trifft genau den Fall, für den der 5-MB-Puffer gebaut wurde:
+    // leere Knopfzelle im DS1307 und ein verpasster NTP-Sync, und das Gerät ist
+    // online, MQTT verbunden, puffert aber nichts. rtc_unix_ms() liefert 0,
+    // solange s_has_date nicht gesetzt ist, und rtc_init() setzt nie ein Datum.
+    // Die Meldung ist gedrosselt, damit sie im Sekundentakt nicht das Log flutet.
     uint64_t unix_s = rtc_unix_ms() / 1000ULL;
-    if (unix_s == 0) { xSemaphoreGive(s_capture_mtx); return; }
+    if (unix_s == 0) {
+        static uint32_t s_no_time_ms   = 0;
+        static uint32_t s_no_time_cnt  = 0;
+        s_no_time_cnt++;
+        uint32_t now_ms = millis();
+        if (s_no_time_ms == 0 || (now_ms - s_no_time_ms) > 60000UL) {
+            s_no_time_ms = now_ms;
+            char m[112];
+            snprintf(m, sizeof(m),
+                     "KEINE Zeitbasis — %lu Zeilen verworfen. RTC ohne Datum, "
+                     "NTP-Sync fehlt. Es wird nichts gepuffert!",
+                     (unsigned long)s_no_time_cnt);
+            syslog("TELEM", m);
+        }
+        xSemaphoreGive(s_capture_mtx);
+        return;
+    }
 
     // ── Zeile unter Mutex in Ringpuffer schreiben ──────────
     if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(50)) != pdTRUE) { xSemaphoreGive(s_capture_mtx); return; }
@@ -552,7 +574,7 @@ static void telem_task(void* /*param*/) {
         }
         // (COG-Kurvenerkennung entfernt — GPS-Drift erzeugt false positives im Stand)
 
-        // GPS-Capture: extern 1s (M10 liefert 1Hz), intern 3s (SIM7080G 5s-Takt)
+        // GPS-Capture: extern 1s (F10 liefert 1Hz), intern 3s (SIM7080G 5s-Takt)
         // Bei Fahrtende (VBUS weg) keine Captures mehr — nur Kompass-Wackler
         if (!g_trip_ending) {
             uint32_t cap_interval = gps_ext_ok() ? 1000UL : 3000UL;
