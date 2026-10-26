@@ -1,0 +1,69 @@
+name: Bug report
+description: The stick does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! German or English, both are fine.
+        IDTelemetry is **beta**. Please never post your `secrets.h`, MQTT AES key, APN credentials or home coordinates.
+  - type: input
+    id: version
+    attributes:
+      label: Firmware version
+      description: Stick web page (http://192.168.4.1) or syslog at boot, e.g. 1.3.0
+      placeholder: 1.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: variant
+    attributes:
+      label: Variant
+      options:
+        - Full (LILYGO T-SIM7080G-S3)
+        - Lite (plain ESP32-S3)
+    validations:
+      required: true
+  - type: dropdown
+    id: flash
+    attributes:
+      label: Flashed via
+      options:
+        - Web Flasher
+        - PlatformIO (built from source)
+        - esptool
+  - type: input
+    id: vehicle
+    attributes:
+      label: Vehicle
+      placeholder: VW ID.7 Pro S, 2024
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CAN / OBD2 values
+        - GPS
+        - LTE-M / modem / SIM
+        - MQTT upload
+        - WiFi / web config
+        - BLE (ELM327 / ABRP)
+        - Sleep / power / battery drain
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Syslog / serial output
+      description: From the stick web page or USB serial. Remove keys and coordinates first.
+      render: text

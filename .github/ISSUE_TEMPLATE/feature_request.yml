@@ -1,0 +1,25 @@
+name: Feature request
+description: An idea for the stick, e.g. a new vehicle or value
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: German or English, both are fine.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What do you want?
+      description: New value, new vehicle, new feature — and why.
+    validations:
+      required: true
+  - type: input
+    id: vehicle
+    attributes:
+      label: Vehicle
+      placeholder: VW ID.3, 2023
+  - type: textarea
+    id: can
+    attributes:
+      label: CAN / UDS details
+      description: Optional. ECU, DID, formula, sample responses — if you know them.
+      render: text
