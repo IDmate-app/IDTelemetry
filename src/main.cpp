@@ -216,17 +216,27 @@ void setup() {
     syslog("BOOT", "pmu_init...");
     pmu_init();
     syslog("BOOT", "pmu_init OK");
-    gps_ext_wake();  // M10 sofort aus Backup wecken — sucht Sats während Rest bootet
+    gps_ext_wake();  // GPS sofort wecken — sucht Sats, während der Rest bootet
 
+    // "nicht angeschlossen" war hier frueher die Meldung fuer jedes -1 — auch
+    // dann, wenn nur die Fuel-Gauge noch nicht bereit war. Present-Bit und
+    // Spannung trennen die Faelle.
     { int b = pmu_batt_pct();
-      char msg[40];
-      if (b >= 0) snprintf(msg, sizeof(msg), "Akku: %d%%", b);
-      else        snprintf(msg, sizeof(msg), "Akku: nicht angeschlossen");
+      char msg[64];
+      if (b >= 0)                    snprintf(msg, sizeof(msg), "Akku: %d%%", b);
+      else if (pmu_batt_present())   snprintf(msg, sizeof(msg),
+                                        "Akku erkannt (%u mV), Ladestand noch unbekannt",
+                                        pmu_batt_mv());
+      else                           snprintf(msg, sizeof(msg), "Akku: nicht angeschlossen");
       syslog("PMU", msg);
     }
+    // cfg_mod_gps() = internes GPS des SIM7080G, NICHT das externe Modul.
+    // Bei gps_src="ext" ist das Flag korrekt 0 — dann ist nur BLDO2 überflüssig,
+    // das ist die Antennen-Rail des Modem-GNSS. Das externe GPS hängt an DC5
+    // und läuft unabhängig davon weiter.
     if (!cfg_mod_gps()) {
-        pmu_set_gps_power(false);  // BLDO2 (GPS-Antenne) abschalten
-        syslog("GPS", "Modul deaktiviert (cfg mod_gps=0) — BLDO2 aus");
+        pmu_set_gps_power(false);  // BLDO2 (Antenne des Modem-GNSS) abschalten
+        syslog("GPS", "Modem-GNSS ungenutzt (gps_src != int) — BLDO2 aus, ext. GPS unberuehrt");
     }
     modem_init();        // UART1 (TX=GPIO5, RX=GPIO4) SIM7080G — übernimmt Modem exklusiv
     modem_start_task();  // FreeRTOS: GPS alle 5s + Traccar alle 60s
@@ -265,7 +275,7 @@ void setup() {
     NimBLEDevice::startAdvertising();
 
     // 5. CAN
-    gps_ext_init();      // Ext. GPS (BLITZ Mini M10, UART2) — nach CAN damit TWAI-Interrupts Vorrang haben
+    gps_ext_init();      // Ext. GPS (u-blox DAN-F10N, UART2) — nach CAN damit TWAI-Interrupts Vorrang haben
     if (!can_init(CAN_SPEED_KBPS)) {
         Serial.println("[CAN] FEHLER - Checklist:");
         Serial.println("  GPIO17→CTX, GPIO18→CRX");
@@ -303,6 +313,18 @@ void loop() {
                 } else if (strcmp(serial_buf, "sleep") == 0) {
                     Serial.println("[CMD] → Deep Sleep");
                     sleep_force();
+                } else if (strcmp(serial_buf, "pmu") == 0) {
+                    pmu_print_info();
+                } else if (strcmp(serial_buf, "gps standby") == 0) {
+                    gps_ext_standby_test();
+                } else if (strcmp(serial_buf, "gps raw") == 0) {
+                    gps_ext_raw_proof();
+                } else if (strcmp(serial_buf, "gps gsv") == 0) {
+                    gps_ext_gsv_proof();
+                } else if (strncmp(serial_buf, "gps cfg", 7) == 0) {
+                    gps_ext_dump_group((uint16_t)strtol(serial_buf + 7, nullptr, 16));
+                } else if (strncmp(serial_buf, "gps powercycle", 14) == 0) {
+                    gps_ext_powercycle_test(atoi(serial_buf + 14));  // Sekunden, 0 → 10
                 } else if (strcmp(serial_buf, "gps") == 0) {
                     modem_print_gps_info();
                 } else if (strcmp(serial_buf, "lte") == 0) {
@@ -338,6 +360,10 @@ void loop() {
                     Serial.println("[CMD] MQTT + GPRS getrennt — simuliert Funkloch");
                     mqtt_disconnect();
                     modem_send_at("+CNACT=0,0");  // GPRS/PDP trennen
+                } else if (strcmp(serial_buf, "can selftest") == 0) {
+                    can_selftest();
+                } else if (strncmp(serial_buf, "can listen", 10) == 0) {
+                    can_listen_only(atoi(serial_buf + 10));
                 } else if (strcmp(serial_buf, "can sniff") == 0) {
                     can_sniff(5000);  // 5 Sekunden
                 } else if (strcmp(serial_buf, "gyro cal") == 0) {

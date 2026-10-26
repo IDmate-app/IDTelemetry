@@ -157,6 +157,133 @@ bool can_init(uint32_t kbps) {
     return true;
 }
 
+
+// ── Diagnose: Treiber voruebergehend in anderer Betriebsart ──
+// Beide Tests bauen den TWAI-Treiber um und danach wieder zurueck. Der
+// Monitor-Task wird dabei nicht angehalten — er prueft nur alle 5 s den Status
+// und laesst BUS_OFF-Recovery aus, solange can_running false ist.
+static bool can_reinstall(twai_mode_t mode, uint32_t kbps) {
+    twai_general_config_t g = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, mode);
+    g.rx_queue_len = 64;
+    g.tx_queue_len = 16;
+    g.intr_flags   = ESP_INTR_FLAG_LEVEL3;
+    twai_timing_config_t t;
+    switch (kbps) {
+        case 125:  t = TWAI_TIMING_CONFIG_125KBITS(); break;
+        case 250:  t = TWAI_TIMING_CONFIG_250KBITS(); break;
+        case 1000: t = TWAI_TIMING_CONFIG_1MBITS();   break;
+        default:   t = TWAI_TIMING_CONFIG_500KBITS(); break;
+    }
+    twai_filter_config_t f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+    if (twai_driver_install(&g, &t, &f) != ESP_OK) return false;
+    if (twai_start() != ESP_OK) { twai_driver_uninstall(); return false; }
+    return true;
+}
+
+// ── "can selftest": Controller + Transceiver ohne Bus pruefen ──
+// TWAI_MODE_NO_ACK verlangt keine Bestaetigung ("Use this mode for self
+// testing", ESP-IDF), und das self-Bit im Rahmen laesst den Controller die
+// eigene Nachricht wieder empfangen. Kommt sie zurueck, sind ESP32, SN65HVD230
+// und der Signalweg bis zum Stecker in Ordnung — dann liegt ein Problem im
+// Fahrzeug oder in der Leitung dorthin, nicht am Stick.
+void can_selftest() {
+    Serial.println("[CAN] --- Selbsttest (ohne Bus) ---");
+    bool war_an = can_running;
+    if (war_an) { twai_stop(); twai_driver_uninstall(); can_running = false; }
+
+    if (!can_reinstall(TWAI_MODE_NO_ACK, CAN_SPEED_KBPS)) {
+        Serial.println("[CAN] FEHLER: Treiber laesst sich nicht in NO_ACK starten");
+    } else {
+        int gesendet = 0, empfangen = 0;
+        for (int i = 0; i < 3; i++) {
+            twai_message_t tx = {};
+            tx.identifier       = 0x7FF;      // hoechste Standard-ID, stoert nichts
+            tx.data_length_code = 2;
+            tx.self             = 1;          // Selbstempfang anfordern
+            tx.data[0] = 0xA5; tx.data[1] = (uint8_t)i;
+            if (twai_transmit(&tx, pdMS_TO_TICKS(200)) == ESP_OK) {
+                gesendet++;
+                twai_message_t rx = {};
+                if (twai_receive(&rx, pdMS_TO_TICKS(200)) == ESP_OK &&
+                    rx.identifier == 0x7FF && rx.data[1] == (uint8_t)i) empfangen++;
+            }
+            delay(50);
+        }
+        twai_status_info_t st;
+        twai_get_status_info(&st);
+        Serial.printf("[CAN] gesendet %d/3, selbst empfangen %d/3, "
+                      "Fehlerzaehler TX=%lu RX=%lu\n",
+                      gesendet, empfangen,
+                      (unsigned long)st.tx_error_counter,
+                      (unsigned long)st.rx_error_counter);
+        // Auswertung bewusst zurueckhaltend: OHNE Gegenstelle und ohne
+        // 120-Ohm-Abschluss bildet sich der dominante Pegel nicht zuverlaessig,
+        // der Selbstempfang kann dann auch bei intakter Hardware scheitern. Ein
+        // Fehlschlag am Schreibtisch beweist deshalb NICHTS. Nur ein Erfolg ist
+        // aussagekraeftig — dann ist die Hardware sicher in Ordnung.
+        if (empfangen == 3) {
+            Serial.println("[CAN] → BESTANDEN. ESP32, Transceiver und Signalweg sind in");
+            Serial.println("[CAN]   Ordnung. Ein BUS_OFF im Fahrzeug kommt dann von der");
+            Serial.println("[CAN]   Gegenstelle oder der Leitung dorthin, nicht vom Stick.");
+        } else {
+            Serial.println("[CAN] → KEIN URTEIL MOEGLICH. Ohne Gegenstelle und ohne");
+            Serial.println("[CAN]   Abschlusswiderstand kann der Selbstempfang auch bei");
+            Serial.println("[CAN]   heiler Hardware scheitern. Das ist KEIN Defektbeweis.");
+            Serial.println("[CAN]   Aussagekraeftig ist stattdessen: 'can listen 20' im");
+            Serial.println("[CAN]   Fahrzeug bei laufendem Motor — der Befehl sendet nichts.");
+            Serial.println("[CAN]   Pruefen laesst sich der Abschluss auch mit dem Messgeraet:");
+            Serial.println("[CAN]   CANH gegen CANL sollten ~120 Ohm sein (am Fahrzeug ~60).");
+        }
+        twai_stop(); twai_driver_uninstall();
+    }
+
+    if (war_an && can_reinstall(TWAI_MODE_NORMAL, CAN_SPEED_KBPS)) can_running = true;
+    Serial.printf("[CAN] Normalbetrieb %s\n", can_running ? "wiederhergestellt" : "NICHT wiederhergestellt!");
+    Serial.println("[CAN] --- Ende ---");
+}
+
+// ── "can listen <sek>": nur zuhoeren, garantiert stumm ──
+// TWAI_MODE_LISTEN_ONLY sendet nichts und bestaetigt nichts — der Controller ist
+// elektrisch stumm. Er kann damit weder BUS_OFF ausloesen noch einen
+// Fahrzeugalarm wecken. Der Befehl fuers Auto: kommt Verkehr an, ist die
+// Verkabelung in Ordnung und der Bus wach.
+void can_listen_only(uint32_t sek) {
+    if (sek == 0 || sek > 120) sek = 10;
+    Serial.printf("[CAN] --- Nur zuhoeren, %lus (sendet nichts) ---\n", (unsigned long)sek);
+    bool war_an = can_running;
+    if (war_an) { twai_stop(); twai_driver_uninstall(); can_running = false; }
+
+    if (!can_reinstall(TWAI_MODE_LISTEN_ONLY, CAN_SPEED_KBPS)) {
+        Serial.println("[CAN] FEHLER: Treiber laesst sich nicht in LISTEN_ONLY starten");
+    } else {
+        uint32_t t0 = millis(), n = 0;
+        uint32_t ids[8] = {}; int nid = 0;
+        while ((millis() - t0) < sek * 1000UL) {
+            twai_message_t rx = {};
+            if (twai_receive(&rx, pdMS_TO_TICKS(100)) != ESP_OK) continue;
+            n++;
+            bool neu = true;
+            for (int i = 0; i < nid; i++) if (ids[i] == rx.identifier) neu = false;
+            if (neu && nid < 8) ids[nid++] = rx.identifier;
+        }
+        Serial.printf("[CAN] %lu Rahmen empfangen, %d verschiedene Kennungen\n",
+                      (unsigned long)n, nid);
+        for (int i = 0; i < nid; i++) Serial.printf("      0x%03lX\n", (unsigned long)ids[i]);
+        if (n == 0)
+            Serial.println("[CAN] → nichts gehoert. Entweder schlaeft der Bus, oder die "
+                           "Leitung/der Transceiver ist unterbrochen. Mit laufendem "
+                           "Motor wiederholen.");
+        else
+            Serial.println("[CAN] → Bus lebt und die Verkabelung traegt. Ein BUS_OFF beim "
+                           "Start kommt dann vom Sendezeitpunkt, nicht von der Hardware.");
+        twai_stop(); twai_driver_uninstall();
+    }
+
+    if (war_an && can_reinstall(TWAI_MODE_NORMAL, CAN_SPEED_KBPS)) can_running = true;
+    Serial.printf("[CAN] Normalbetrieb %s\n", can_running ? "wiederhergestellt" : "NICHT wiederhergestellt!");
+    Serial.println("[CAN] --- Ende ---");
+}
+
 void can_stop() {
     if (!can_running) return;
     twai_stop();
@@ -332,7 +459,7 @@ int can_rx_collect(uint32_t resp_id, uint32_t timeout_ms,
 //  UDS Service 0x22
 // ============================================================
 bool uds_read_did(uint32_t req_id, uint32_t resp_id, uint16_t did,
-                  uint8_t* resp_data, uint8_t* resp_len) {
+                  uint8_t* resp_data, uint8_t* resp_len, uint8_t max_len) {
     if (!can_running) return false;
     if (!can_tx_allowed()) return false;
     if (!can_lock()) return false;
@@ -351,8 +478,19 @@ bool uds_read_did(uint32_t req_id, uint32_t resp_id, uint16_t did,
     if (rdid != did) return false;
 
     if (resp_data && resp_len) {
-        *resp_len = (uint8_t)(n - 3);
-        memcpy(resp_data, buf + 3, *resp_len);
+        // Die Nutzdatenlaenge bestimmt das Steuergeraet: n kann bis 64 werden,
+        // also bis 61 Byte Nutzdaten. Frueher wurde das ohne jede Pruefung in
+        // den Puffer des Aufrufers kopiert. scan_dids() uebergibt uint8_t[8],
+        // und der erste Eintrag der Scan-Liste ist 0xF190 (VIN) mit 17 Byte —
+        // ein sicherer Stapelueberlauf, sobald ein Fahrzeug antwortet.
+        uint8_t avail = (uint8_t)(n - 3);
+        if (max_len == 0) {          // Aufrufer hat keine Groesse genannt
+            *resp_len = 0;
+            return false;
+        }
+        if (avail > max_len) avail = max_len;
+        *resp_len = avail;
+        memcpy(resp_data, buf + 3, avail);
     }
     return true;
 }
@@ -413,8 +551,8 @@ static void scan_dids(uint32_t req_id, uint32_t resp_id, const char* module_name
         snprintf(status, 64, "DID 0x%04X: %s", d.did, d.name);
         ws_scan_status(status, scan_step, scan_total);
 
-        uint8_t resp[8]; uint8_t rlen = 0;
-        bool ok = uds_read_did(req_id, resp_id, d.did, resp, &rlen);
+        uint8_t resp[64]; uint8_t rlen = 0;
+        bool ok = uds_read_did(req_id, resp_id, d.did, resp, &rlen, sizeof(resp));
         if (ok) {
             snprintf(status, 64, "✓ %s OK", d.name);
             ws_scan_status(status, scan_step, scan_total);
@@ -468,7 +606,8 @@ void scan_task(void* pv) {
 }
 
 void monitor_task(void*) {
-    uint32_t last_hw_check = 0;
+    uint32_t last_hw_check   = 0;
+    uint32_t s_busoff_events = 0;   // aufeinanderfolgende BUS_OFF-Ereignisse
 
     while (!g_shutdown) {
         // Alle 5s echten TWAI-Zustand prüfen → BUS_OFF = Transceiver fehlt/defekt
@@ -478,16 +617,70 @@ void monitor_task(void*) {
                 twai_status_info_t st;
                 if (twai_get_status_info(&st) == ESP_OK &&
                     st.state == TWAI_STATE_BUS_OFF) {
-                    Serial.println("[CAN] BUS_OFF — Recovery...");
-                    syslog("CAN", "BUS_OFF erkannt — Recovery läuft");
-                    twai_initiate_recovery();
-                    vTaskDelay(pdMS_TO_TICKS(500));
-                    if (twai_get_status_info(&st) == ESP_OK &&
-                        st.state == TWAI_STATE_RUNNING) {
-                        syslog("CAN", "BUS_OFF Recovery OK");
-                    } else {
-                        can_running = false;
-                        syslog("CAN", "FEHLER: BUS_OFF Recovery fehlgeschlagen — Transceiver prüfen");
+                    // Der Treiber endet nach der Wiederherstellung im Zustand
+                    // STOPPED, NICHT in RUNNING — so steht es im ESP-IDF-Header:
+                    // "wait for 128 occurrences of the bus-free signal on the
+                    // TWAI bus before returning to the stopped state". Danach
+                    // muss twai_start() gerufen werden.
+                    //
+                    // Frueher wurde hier auf RUNNING geprueft und twai_start()
+                    // fehlte ganz. Die Bedingung konnte also nie zutreffen, der
+                    // else-Zweig setzte can_running = false — und weil die
+                    // Pruefung selbst in "if (can_running)" steht und der Wert
+                    // ausser in can_init() nirgends wieder true wird, war CAN
+                    // damit bis zum naechsten Neustart tot. Genau das ist am
+                    // 28.08. um 21:56 passiert: eine Fahrt lang keine OBD-Werte,
+                    // waehrend GPS normal weiterlief.
+                    //
+                    // Auch die Wartezeit war zu knapp: 128 Bus-Frei-Signale
+                    // brauchen bei ruhigem Bus deutlich laenger als 500 ms.
+                    // Jetzt wird bis 3 s in 100-ms-Schritten geprueft, und bei
+                    // Misserfolg beim naechsten 5-s-Takt erneut versucht statt
+                    // endgueltig aufzugeben.
+                    // Drosselung: solange kein Fahrzeug dranhaengt, faellt der
+                    // Bus im 5-s-Takt immer wieder aus. Die ersten drei Ereignisse
+                    // werden gemeldet, danach nur noch jedes 60. (alle 5 min).
+                    // Der Zaehler wird zurueckgesetzt, sobald der Bus stabil ist —
+                    // ein einzelner Ausfall im Fahrzeug wird also normal geloggt.
+                    s_busoff_events++;
+                    bool laut = (s_busoff_events <= 3) || (s_busoff_events % 60 == 0);
+                    if (laut) {
+                        Serial.println("[CAN] BUS_OFF — Recovery...");
+                        syslog("CAN", "BUS_OFF erkannt — Recovery läuft");
+                    }
+
+                    bool ok = false;
+                    if (can_lock(200)) {
+                        if (twai_initiate_recovery() == ESP_OK) {
+                            for (int i = 0; i < 30 && !ok; i++) {
+                                vTaskDelay(pdMS_TO_TICKS(100));
+                                if (twai_get_status_info(&st) == ESP_OK &&
+                                    st.state == TWAI_STATE_STOPPED) ok = true;
+                            }
+                            if (ok) ok = (twai_start() == ESP_OK);
+                        }
+                        can_unlock();
+                    }
+
+                    if (ok) {
+                        if (laut) syslog("CAN", "BUS_OFF Recovery OK — Bus wieder aktiv");
+                    } else if (laut) {
+                        char m[104];
+                        snprintf(m, sizeof(m),
+                                 "BUS_OFF Recovery erfolglos (%lu. Ereignis) — "
+                                 "Bus/Transceiver pruefen, es wird weiter versucht",
+                                 (unsigned long)s_busoff_events);
+                        syslog("CAN", m);
+                    }
+                } else {
+                    // Bus laeuft sauber → Zaehler zuruecksetzen, damit ein
+                    // spaeterer Einzelausfall wieder vollstaendig geloggt wird.
+                    if (s_busoff_events) {
+                        char m[72];
+                        snprintf(m, sizeof(m), "Bus stabil nach %lu BUS_OFF-Ereignissen",
+                                 (unsigned long)s_busoff_events);
+                        syslog("CAN", m);
+                        s_busoff_events = 0;
                     }
                 }
             }

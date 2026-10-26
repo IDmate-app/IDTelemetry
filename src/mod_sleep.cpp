@@ -324,8 +324,10 @@ static void enter_deep_sleep(const char* reason) {
         pmu_set_charging(false);
     }
 
-    // Ext. GPS in Backup-Mode (µA) — behält Orbit-Daten + RTC, wacht per UART auf
-    // DC5 bleibt AN damit Backup-Mode funktioniert (V_BCKP über Farad-Cap)
+    // Ext. GPS: DC5 wird abgeschaltet, das Modul geht ins Hardware-Backup.
+    // RTC und BBR hält die Stützzelle des Boards; am Gerät nachgemessen steht
+    // der 3D-Fix danach nach gut vier Sekunden wieder. Ausführliche Begründung
+    // samt Abwägung gegen den Software-Standby in gps_ext_sleep().
     gps_ext_sleep();
     modem_clear_reboot_count();   // FIXES B.17: WD-Reboot-Counter nicht über Sleep schleppen
     pmu_set_modem_power(false);
@@ -378,8 +380,11 @@ static void enter_deep_sleep(const char* reason) {
     rtc_gpio_pulldown_dis(PMU_INT_PIN);
     esp_sleep_enable_ext0_wakeup(PMU_INT_PIN, 0);  // 0 = wake on LOW
 
-    // Debug: DC5-Status vor Deep Sleep prüfen
-    { char m[64]; snprintf(m, sizeof(m), "DC5 vor Sleep: %s", pmu_is_dc5_on() ? "AN" : "AUS!"); syslog("SLEEP", m); }
+    // Debug: DC5-Status vor Deep Sleep prüfen. Erwartet wird AUS — gps_ext_sleep()
+    // hat die Schiene abgeschaltet. Steht hier AN, ist das der Fehlerfall.
+    { char m[64]; snprintf(m, sizeof(m), "DC5 vor Sleep: %s",
+                           pmu_is_dc5_on() ? "AN — sollte aus sein!" : "aus (erwartet)");
+      syslog("SLEEP", m); }
 
     Serial.flush();
     delay(100);

@@ -13,6 +13,8 @@ void can_stop();
 // mehreren Tasks (Telemetrie, ELM327, Web-Scanner, Monitor).
 // can_isotp_query() und uds_read_did() locken intern.
 // Für manuelle tx+rx-Paare: can_lock() VOR tx, can_unlock() NACH rx.
+void can_selftest();               // "can selftest": Controller+Transceiver ohne Bus
+void can_listen_only(uint32_t sek);// "can listen <s>": nur zuhoeren, sendet garantiert nichts
 bool can_lock(uint32_t timeout_ms = 500);
 void can_unlock();
 
@@ -35,8 +37,11 @@ int can_rx_collect(uint32_t resp_id, uint32_t timeout_ms,
                    uint32_t out_ids[], int max_frames);
 
 // UDS Service 0x22 Read Data By Identifier
+// max_len = Groesse von resp_data. Pflicht, sobald ein Puffer uebergeben wird —
+// die Antwortlaenge bestimmt das Steuergeraet, nicht der Aufrufer.
 bool uds_read_did(uint32_t req_id, uint32_t resp_id, uint16_t did,
-                  uint8_t* resp_data = nullptr, uint8_t* resp_len = nullptr);
+                  uint8_t* resp_data = nullptr, uint8_t* resp_len = nullptr,
+                  uint8_t max_len = 0);
 
 // Tester Present (hält Session offen)
 void uds_tester_present(uint32_t req_id);

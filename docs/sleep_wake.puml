@@ -20,7 +20,7 @@ state Running #DDF4FF {
 
 state DeepSleep #FFF8C5 {
   DeepSleep : ESP32-S3 in deep sleep (~uA)
-  DeepSleep : M10 GPS in idle (~5 mA)
+  DeepSleep : F10 GPS in idle
   DeepSleep : SIM7080G powered off
   DeepSleep : RTC + AXP2101 awake
 }
