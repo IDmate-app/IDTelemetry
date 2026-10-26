@@ -1,0 +1,71 @@
+name: Firmware
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('platformio.ini') }}
+
+      # Public builds use the example defaults; AP, APN, MQTT and the AES key
+      # are set on the stick's web page and stored in NVS.
+      - name: Build full + lite
+        run: |
+          [ -f src/secrets.h ] || cp src/secrets.h.example src/secrets.h
+          pip install platformio
+          pio run -e s3_full -e s3_lite
+
+      - name: Collect binaries
+        run: |
+          V=$(sed -n 's/^#define FW_VERSION *"\(.*\)".*/\1/p' src/config.h)
+          [ -n "$V" ] || { echo "::error::FW_VERSION not found in src/config.h"; exit 1; }
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          mkdir -p dist
+          for v in full lite; do
+            b=.pio/build/s3_$v
+            cp "$b/bootloader.bin" "dist/idtelemetry-$v-$V.bootloader.bin"
+            cp "$b/partitions.bin" "dist/idtelemetry-$v-$V.partitions.bin"
+            cp "$b/firmware.bin"   "dist/idtelemetry-$v-$V.bin"
+          done
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: idtelemetry-${{ env.VERSION }}
+          path: dist/
+
+      # A new FW_VERSION on main becomes release v<version> with the binaries
+      # the web flasher manifests point at. Existing releases stay untouched.
+      - name: Release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION already released"; exit 0
+          fi
+          for v in full lite; do
+            grep -q "releases/download/v$VERSION/idtelemetry-$v-$VERSION.bin" "docs/flasher/manifest_$v.json" || {
+              echo "::error::docs/flasher/manifest_$v.json does not point at v$VERSION"; exit 1; }
+          done
+          awk -v v="$VERSION" 'index($0, "## [" v "]") == 1 {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
+          echo "Flash in the browser: https://idmate-app.github.io/IDTelemetry/flasher/" >> notes.md
+          gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "v$VERSION (beta)" \
+            --notes-file notes.md --prerelease
