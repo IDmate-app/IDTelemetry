@@ -1220,25 +1220,37 @@ void modem_init() {
     //    Rückgängig: testAT(1000), retry>6, delay(3000)
     syslog("MODEM", "AT-Handshake...");
     {
-        int retry = 0;
-        int pwrkey_cycles = 0;
-        while (!s_modem.testAT(500)) {
+        // Diese Schleife hatte KEINE Abbruchbedingung. Antwortet das Modem nie
+        // — defekte DC3-Schiene, gestoerte UART-Leitung, Hardwarefehler im
+        // SIM7080G — pulste sie endlos PWRKEY und setup() wurde nie fertig.
+        // Damit fielen auch telem_init(), can_init(), gps_ext_init() und der
+        // WiFi-Upload aus, und der Deep Sleep wurde nie erreicht: ein
+        // Modemfehler legte das ganze Geraet still und zog den Akku leer.
+        //
+        // Die Reihenfolge der AT-Kommandos bleibt unangetastet, es kommt nur ein
+        // Ausstieg dazu. Nach 5 PWRKEY-Zyklen (rund 40 s) geht es ohne Modem
+        // weiter — GPS, CAN, Puffer und Sleep funktionieren dann normal, die
+        // Zeilen sammeln sich im Flash und gehen spaeter raus.
+        const int MAX_PWRKEY_ZYKLEN = 5;
+        int  retry = 0, zyklen = 0;
+        bool at_ok = false;
+        while (!(at_ok = s_modem.testAT(500))) {
             if (++retry > 3) {
-                // FIXES B.2: KEIN endloses Hängen. Wenn die PMU fehlt (DC3 aus →
-                // Modem stromlos) oder das Modem defekt ist, gäbe es hier sonst eine
-                // Endlosschleife → loop()/sleep_update() laufen nie → kein Deep Sleep
-                // → Akku bis Tiefentladung. Nach ~5 PWRKEY-Zyklen (≈30 s) aufgeben,
-                // s_sim_ok=false setzen und GPS-only weiterbooten (modem_task retryt).
-                if (++pwrkey_cycles > 5) {
-                    s_sim_ok = false;
-                    syslog("MODEM", "FEHLER: kein AT nach 5 PWRKEY-Zyklen — Modem defekt/abwesend, boote GPS-only");
-                    return;
-                }
-                syslog("MODEM", "Kein AT · PWRKEY-Puls...");
+                if (++zyklen > MAX_PWRKEY_ZYKLEN) break;
+                char m[72];
+                snprintf(m, sizeof(m), "Kein AT · PWRKEY-Puls %d/%d...",
+                         zyklen, MAX_PWRKEY_ZYKLEN);
+                syslog("MODEM", m);
                 modem_pwrkey_pulse();
                 delay(1800);   // Serial aktiv nach ~1.8s (SIM7080 Datasheet)
                 retry = 0;
             }
+        }
+        if (!at_ok) {
+            s_sim_ok = false;
+            syslog("MODEM", "FEHLER: Modem antwortet nicht — Start ohne Modem. "
+                            "GPS, CAN und Puffer laufen weiter.");
+            return;
         }
     }
     syslog("MODEM", "AT OK");
@@ -1478,6 +1490,50 @@ static bool modem_ntp_sync() {
 }
 
 
+// AT-Sequenz identisch zu TinyGSMs gprsConnectImpl (TinyGsmClientSIM7080.h) —
+// die Abfolge ist empirisch erarbeitet und darf nicht umgebaut werden, auch
+// nicht das Kuriosum "PDP-Kontext 1 definieren, aber Kontext 0 aktivieren".
+// Nur die Wartezeiten sind begrenzt: die Bibliothek wartet je Schritt bis 60 s
+// und in der CNACT-Schleife 5x60 s allein auf die "+APP PDP"-URCs (OK/ERROR
+// matchen dort nicht) — ein Fehlversuch blockierte den Modem-Task so ~6,5 min
+// am Stueck (keine Publishes, keine Eskalation). Hier: Worst Case ~75 s.
+// "+APP PDP: 0,DEACTIVE" zaehlt als Fehler — die Bibliothek wertete auch das
+// als Erfolg (bool-Cast von Rueckgabe 2), Quelle der 0.0.0.0-Faelle.
+static bool gprs_connect_bounded(const char* apn, const char* user, const char* pwd) {
+    // Trennen wie gprsDisconnect, nur begrenzt
+    s_modem.sendAT("+CNACT=0,0");
+    s_modem.waitResponse(5000L);
+    s_modem.sendAT("+CGATT=0");
+    s_modem.waitResponse(5000L);
+
+    s_modem.sendAT(GF("+CGDCONT=1,\"IP\",\""), apn, '"');
+    s_modem.waitResponse();
+
+    s_modem.sendAT(GF("+CGATT=1"));
+    if (s_modem.waitResponse(20000L) != 1) { return false; }
+
+    s_modem.sendAT(GF("+CGNAPN"));
+    s_modem.waitResponse();
+
+    if (pwd && strlen(pwd) > 0 && user && strlen(user) > 0) {
+        s_modem.sendAT(GF("+CNCFG=0,1,\""), apn, "\",\"", user, "\",\"", pwd, '"');
+    } else if (user && strlen(user) > 0) {
+        s_modem.sendAT(GF("+CNCFG=0,1,\""), apn, "\",\"", user, '"');
+    } else {
+        s_modem.sendAT(GF("+CNCFG=0,1,\""), apn, '"');
+    }
+    s_modem.waitResponse();
+
+    for (int i = 0; i < 2; i++) {
+        s_modem.sendAT(GF("+CNACT=0,1"));
+        int8_t r = s_modem.waitResponse(20000L, GF(GSM_NL "+APP PDP: 0,ACTIVE"),
+                                        GF(GSM_NL "+APP PDP: 0,DEACTIVE"));
+        s_modem.waitResponse();  // OK der AT-Antwort abraeumen
+        if (r == 1) { return true; }
+    }
+    return false;
+}
+
 bool modem_ensure_connected() {
     if (s_modem.isGprsConnected()) {
         return true;
@@ -1487,9 +1543,9 @@ bool modem_ensure_connected() {
     s_modem.sendAT("+CNACT=0,0");
     s_modem.waitResponse(5000L);
 
-    // gprsConnect: setzt APN, sendet +CNACT=0,1, wartet auf "+APP PDP: 0,ACTIVE" URC
+    // setzt APN, sendet +CNACT=0,1, wartet auf "+APP PDP: 0,ACTIVE" URC
     syslog("MODEM", "GPRS verbinden...");
-    if (!s_modem.gprsConnect(cfg_apn(), cfg_apn_user(), cfg_apn_pass())) {
+    if (!gprs_connect_bounded(cfg_apn(), cfg_apn_user(), cfg_apn_pass())) {
         syslog("MODEM", "GPRS fehlgeschlagen");
         s_connected = false;
         return false;

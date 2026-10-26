@@ -87,6 +87,25 @@ bool rtc_set_time(int h, int m, int s) {
     return ok;
 }
 
+// Sind die aus dem DS1307 gelesenen Werte ueberhaupt moeglich?
+// Die Register werden nur maskiert, nicht geprueft: Reg 5 & 0x1F laesst einen
+// Monat bis 25 durch, Reg 4 & 0x3F einen Tag bis 45. Ungeprueft laufen solche
+// Werte in die Datumsrechnung, und dort liest die Schleife
+//     for (int mm = 1; mm < mo; mm++) days += mdays[mm];
+// bei mo > 13 hinter das Ende des 13-elementigen Arrays. Das Ergebnis ist ein
+// beliebiger Flash-Inhalt als Zeitstempel — und s_has_date bleibt danach
+// dauerhaft gesetzt, der falsche Wert also dauerhaft in Gebrauch.
+// Dass solche Werte real vorkommen, steht schon im Code: inject_time() in
+// mod_gps_ext.cpp filtert "Jahr 2093, Monat 25" ausdruecklich heraus.
+static bool rtc_plausible(int y, int mo, int d, int h, int mi, int s) {
+    return y  >= 2000 && y  <= 2099
+        && mo >= 1    && mo <= 12
+        && d  >= 1    && d  <= 31
+        && h  >= 0    && h  <= 23
+        && mi >= 0    && mi <= 59
+        && s  >= 0    && s  <= 59;
+}
+
 bool rtc_get_datetime(int& y, int& mo, int& d, int& h, int& mi, int& s) {
     Wire.beginTransmission(DS1307_ADDR);
     Wire.write(0x00);
@@ -100,10 +119,16 @@ bool rtc_get_datetime(int& y, int& mo, int& d, int& h, int& mi, int& s) {
     d  = bcd2dec(Wire.read() & 0x3F);  // Reg 4: Tag
     mo = bcd2dec(Wire.read() & 0x1F);  // Reg 5: Monat
     y  = 2000 + bcd2dec(Wire.read());   // Reg 6: Jahr (00-99)
-    return true;
+    // Unsinnige Werte gar nicht erst herausgeben — siehe rtc_plausible().
+    return rtc_plausible(y, mo, d, h, mi, s);
 }
 
 bool rtc_set_datetime(int y, int mo, int d, int h, int mi, int s) {
+    // Ohne diese Pruefung greift t[mo-1] weiter unten bei mo = 0 auf t[-1] zu.
+    // Zwei der drei Aufrufer pruefen selbst, der dritte nicht: modem_ntp_sync()
+    // reicht das Ergebnis von sscanf auf die +CCLK?-Antwort ungeprueft durch.
+    if (!rtc_plausible(y, mo, d, h, mi, s)) return false;
+
     // DS1307 Register 0-6: Sek, Min, Std, Wochentag, Tag, Monat, Jahr
     // Wochentag berechnen (Zeller) — DS1307 braucht 1-7
     // Vereinfachte Berechnung (Tomohiko Sakamoto)

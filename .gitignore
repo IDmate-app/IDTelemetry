@@ -18,6 +18,7 @@ debug logs/
 
 # Internal docs (not for GitHub)
 BAUPLAN.md
+CLAUDE.md
 INFLUX_PLAN.md
 fehler-opus.md
 todos.md

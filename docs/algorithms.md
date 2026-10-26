@@ -245,7 +245,7 @@ function enter_deep_sleep():
     wait up to 2 s for tasks to release I2C/CAN/UART
     telem_persist_to_spiffs()                       # cache + row queue
     modem_poweroff()
-    gps_ext_idle()                                  # M10 keeps tracking
+    gps_ext_idle()                                  # F10 keeps tracking
     configure wake sources:
         EXT0 = MPU-6050 INT (motion)    GPIO3 high
         EXT1 = AXP2101 INT (VBUS)       GPIO6 low

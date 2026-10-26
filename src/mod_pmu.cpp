@@ -46,7 +46,7 @@ void pmu_init() {
     delay(100);  // Rail stabilisieren vor nächstem
     // DC5  = Ext. GPS 3300mV
     // Nach Deep Sleep: DC5 NICHT neu setzen! setDC5Voltage() kann einen kurzen
-    // Glitch auf der Rail verursachen → M10 sieht Power-Cycle → BBR verloren.
+    // Glitch auf der Rail verursachen → F10 sieht Power-Cycle → BBR verloren.
     bool dc5_was_on = PMU.isEnableDC5();
     if (!dc5_was_on) {
         PMU.setDC5Voltage(3300);
@@ -57,6 +57,19 @@ void pmu_init() {
 
     // TS-Pin Messung deaktivieren (wie LilyGo-Beispiel — sonst blockiert Laden)
     PMU.disableTSPinMeasure();
+
+    // ---- Akku-Erkennung und Messkanäle einschalten ----
+    // Ohne diese Aufrufe meldet der AXP2101 dauerhaft "kein Akku", egal ob eine
+    // Zelle dranhängt: isBatteryConnect() liest nur Bit 3 in STATUS1, und dieses
+    // Present-Bit setzt der Chip erst, wenn die Erkennung aktiv ist. In der
+    // Bibliothek hängt alles Weitere daran — getBattVoltage() gibt hart 0 zurück
+    // und getBatteryPercent() hart -1, wenn isBatteryConnect() false liefert.
+    // Der Kommentar an getBattVoltage() ("rohe ADC-Messung, immer zuverlaessig")
+    // stimmt deshalb nur, solange die Erkennung eingeschaltet ist.
+    PMU.enableBattDetection();
+    PMU.enableBattVoltageMeasure();
+    PMU.enableVbusVoltageMeasure();
+    PMU.enableSystemVoltageMeasure();
 
     // Nach EXT0-Wake (PMU INT): pending IRQ löschen, damit INT-Pin wieder HIGH geht
     if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
@@ -102,6 +115,39 @@ void pmu_update() {
 int pmu_batt_pct() { return s_batt_pct; }
 
 bool pmu_ok() { return s_pmu_ok; }   // FIXES B.10: PMU gefunden + initialisiert?
+
+uint16_t pmu_batt_mv() {
+    if (!s_pmu_ok) return 0;
+    return PMU.getBattVoltage();
+}
+
+bool pmu_batt_present() {
+    if (!s_pmu_ok) return false;
+    return PMU.isBatteryConnect();
+}
+
+// Rohwerte ausgeben — Serial-Befehl "pmu". Trennt die Fälle, die pmu_batt_pct()
+// alle als -1 zurückgibt: kein Akku erkannt, Gauge noch nicht bereit, oder PMU
+// gar nicht gefunden. Ohne das ist "Akku: n/a" nicht zu deuten.
+void pmu_print_info() {
+    if (!s_pmu_ok) { Serial.println("[PMU] AXP2101 nicht gefunden"); return; }
+    bool     present = PMU.isBatteryConnect();
+    uint16_t mv      = PMU.getBattVoltage();
+    int      raw     = PMU.getBatteryPercent();
+    Serial.printf("[PMU] Akku erkannt: %s\n", present ? "ja" : "NEIN");
+    Serial.printf("[PMU] Spannung: %u mV   Gauge: %d %%   gefiltert: %d %%\n",
+                  mv, raw, s_batt_pct);
+    Serial.printf("[PMU] VBUS: %s   laedt: %s\n",
+                  PMU.isVbusIn() ? "ja" : "nein",
+                  PMU.isCharging() ? "ja" : "nein");
+    Serial.printf("[PMU] Rails: DC5(ext.GPS)=%s\n", PMU.isEnableDC5() ? "an" : "aus");
+    if (!present)
+        Serial.println("[PMU] → kein Present-Bit. Entweder haengt keine Zelle dran,"
+                       " oder die Erkennung ist aus (enableBattDetection).");
+    else if (raw <= 0 && mv > 3300)
+        Serial.println("[PMU] → Zelle da, Spannung gesund, aber Gauge meldet 0 %."
+                       " Das Register braucht nach dem Boot etwas Zeit.");
+}
 
 bool pmu_is_vbus_in() {
     if (!s_pmu_ok) return false;

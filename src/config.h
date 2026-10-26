@@ -39,7 +39,11 @@
 #define GPS_EXT_ENABLED     true   // Externes u-blox GPS an UART2, Versorgung PMU-Rail DC5
 #define GPS_EXT_RX_PIN       1     // GPIO1  ← GPS TX
 #define GPS_EXT_TX_PIN       2     // GPIO2  → GPS RX
-#define GPS_EXT_BAUD        115200   // nur Startwert — gps_ext_init() erkennt die Rate selbst
+#define GPS_EXT_BAUD         38400   // Werkseinstellung des DAN-F10N und erster Kandidat
+                                   // der Baudsuche. Stand hier 115200, was bei jedem
+                                   // Kaltstart ~1,2 s verschenkte: der erste Versuch
+                                   // musste erst in den Timeout laufen. gps_ext_init()
+                                   // erkennt die Rate ohnehin selbst.
                                    // false = nur internes SIM7080G-GPS + LTE
 
 // ELM327 Mock-Modus: Antwortet auf alle OBD-Anfragen mit Dummy-Werten
@@ -126,7 +130,8 @@
 #define CAN_RS_PIN          -1           // -1 = RS am Modul auf GND gebrückt
 #define CAN_SPEED_KBPS      500
 
-// I2C Bus (extern): RTC DS1307 (0x68) + MPU-6050 (0x69) + QMC5883L (0x0D) + BLITZ M10 (0x42)
+// I2C Bus (extern): RTC DS1307 (0x68) + MPU-6050 (0x69)
+// Das externe GPS (u-blox DAN-F10N) haengt an UART2, nicht am I2C.
 #define RTC_SDA_PIN         45
 #define RTC_SCL_PIN         21
 

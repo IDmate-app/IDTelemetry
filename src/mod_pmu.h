@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 #include "config.h"
 
 // ============================================================
@@ -17,6 +18,9 @@ void pmu_init();
 void pmu_update();    // frischen I2C-Abruf
 int  pmu_batt_pct();  // -1 = kein Akku / PMU nicht gefunden, 0-100 = %
 bool pmu_ok();        // FIXES B.10: true = AXP2101 gefunden + initialisiert
+uint16_t pmu_batt_mv();      // Rohe Akkuspannung in mV, 0 = nicht messbar
+bool pmu_batt_present();     // AXP2101 Present-Bit (STATUS1 Bit 3)
+void pmu_print_info();       // Serial-Befehl "pmu": Rohwerte ausgeben
 bool pmu_is_vbus_in();   // true = externe Spannung am USB/VBUS angeschlossen
 bool pmu_is_charging();  // true = Akku wird gerade geladen
 void pmu_set_charging(bool on);      // Laden ein/ausschalten (fuer Deep Sleep)
@@ -33,6 +37,9 @@ static inline void pmu_init()                     {}
 static inline void pmu_update()                   {}
 static inline int  pmu_batt_pct()                 { return -1; }
 static inline bool pmu_ok()                       { return true; }  // Stub deterministisch
+static inline uint16_t pmu_batt_mv()              { return 0; }     // nicht messbar
+static inline bool pmu_batt_present()             { return false; }
+static inline void pmu_print_info()               {}
 static inline bool pmu_is_vbus_in()               { return true; }  // assume USB-powered
 static inline bool pmu_is_charging()              { return false; }
 static inline void pmu_set_charging(bool)         {}
