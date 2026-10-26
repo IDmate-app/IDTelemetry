@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Telemetry Stick · Data</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="/style.css">
+<style>
+body{font-size:14px;line-height:1.35}
+.container{max-width:640px;padding:16px}
+.status-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:12px;color:var(--muted)}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+.status-dot.ok{background:var(--green);box-shadow:0 0 5px var(--green)}
+.tbl{width:100%;border-collapse:collapse;background:var(--bg2);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.tbl th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg3);font-weight:400}
+.tbl th:last-child{text-align:center;width:24px}
+.tbl td{padding:7px 12px;border-bottom:1px solid rgba(42,58,74,.5);font-size:13px}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(0,229,255,.03)}
+.tbl .sep td{padding:4px 12px;border-bottom:1px solid var(--border);background:var(--bg3)}
+.field-name{color:var(--muted);font-size:12px}
+.field-val{font-weight:700;color:var(--text);min-width:100px}
+.field-val.na{color:var(--muted);font-weight:400}
+.field-age{color:var(--muted);font-size:12px;white-space:nowrap;min-width:50px}
+.age-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:rgba(90,122,150,.2)}
+.age-dot.green{background:var(--green);box-shadow:0 0 5px var(--green)}
+.age-dot.yellow{background:var(--yellow);box-shadow:0 0 5px var(--yellow)}
+.age-dot.red{background:var(--red);box-shadow:0 0 5px var(--red)}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow1">
+    <button type="button" class="burger-btn" onclick="toggleMenu(event)">&#9776;</button>
+    <div class="logo">TS<span>.</span>DATA <span id="fw-ver" style="font-size:9px;color:var(--muted);font-weight:400"></span></div>
+    <span style="flex:1"></span>
+    <div class="led-g"><div class="led" id="led-gps"></div><span class="led-lbl">GPS</span></div>
+    <div class="modem-w">
+      <div class="modem-bars">
+        <div class="modem-bar bar1" id="mb1"></div>
+        <div class="modem-bar bar2" id="mb2"></div>
+        <div class="modem-bar bar3" id="mb3"></div>
+        <div class="modem-bar bar4" id="mb4"></div>
+        <div class="modem-bar bar5" id="mb5"></div>
+      </div>
+      <div class="modem-op" id="modem-op">--</div>
+    </div>
+    <nav class="drop-nav" id="drop-nav" style="display:none">
+      <a href="/daten" class="active" data-i18n="nav.data">DATA</a>
+      <a href="/debug" data-i18n="nav.debug">DEBUG</a>
+      <a href="/config" data-i18n="nav.config">CONFIG</a>
+    </nav>
+  </div>
+  <div class="hrow2">
+    <div class="led-g"><div class="led blue" id="led-can"></div><span class="led-lbl">CAN</span></div>
+    <div class="led-g"><div class="led" id="led-ble"></div><span class="led-lbl">BLE</span></div>
+    <div class="led-g"><div class="led" id="led-gyro"></div><span class="led-lbl">GYRO</span></div>
+    <div class="led-g"><div class="led" id="led-tx"></div><span class="led-lbl">TX</span></div>
+    <div class="led-g"><div class="led" id="led-rx"></div><span class="led-lbl">RX</span></div>
+    <div class="led-g" style="min-width:38px"><span id="batt-pct" style="font-size:10px;font-weight:700;color:var(--muted)">--</span><span class="led-lbl">BAT</span></div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="status-bar">
+    <div class="status-dot" id="fetch-dot"></div>
+    <span id="fetch-txt" data-i18n="data.loading">Lade Telemetrie&#8230;</span>
+    <span style="flex:1"></span>
+    <span id="fetch-ts" style="font-size:10px"></span>
+  </div>
+
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th data-i18n="data.th_name">Name</th>
+        <th data-i18n="data.th_value">Wert</th>
+        <th data-i18n="data.th_age">Alter</th>
+        <th>&#9679;</th>
+      </tr>
+    </thead>
+    <tbody id="tbl-body">
+      <tr><td colspan="4" style="color:var(--muted);text-align:center;padding:24px" data-i18n="data.waiting">Warte auf Daten&#8230;</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/common.js"></script>
+<script src="/i18n.js"></script>
+<script>
+// ── LED Flash ────────────────────────────────────────────
+var _ledTimers = {};
+function flashLed(id, cls) {
+  var el = document.getElementById('led-'+id);
+  if (!el) return;
+  el.classList.add(cls);
+  clearTimeout(_ledTimers[id]);
+  _ledTimers[id] = setTimeout(function(){ el.classList.remove(cls); }, 150);
+}
+
+// ── Status Polling ───────────────────────────────────────
+async function fetchStatus(){
+  try{
+    var d=await(await fetch('/status')).json();
+    if(d.fw_version){var v=document.getElementById('fw-ver');if(v)v.textContent='v'+d.fw_version;}
+    setLed('can', d.can_ok?'green':'blue');
+    if(!d.gyro_ok) setLed('gyro','');
+    else setLed('gyro', d.gyro_state===2?'yellow':'green');
+    setLed('gps', d.gps_valid?'green':'');
+    setBatt(d.batt_pct??-1,d.charging??false,d.vbus_in??false);
+    updateModem(d.modem_sig??-1, d.modem_op??'', d.modem_sim??false, d.modem_ok??false);
+  }catch(e){}
+}
+fetchStatus();
+var _statusTimer=setInterval(fetchStatus,6000);
+
+// ── Telemetrie-Tabelle ───────────────────────────────────
+var NEVER = 4294967295;
+
+function fmtAge(ms) {
+  if (ms >= NEVER) return '\u2014';
+  if (ms < 1000)   return ms + ' ms';
+  return Math.round(ms / 1000) + ' s';
+}
+
+function ageClass(ms) {
+  if (ms >= NEVER)   return '';
+  if (ms < 15000)    return 'green';
+  if (ms < 90000)    return 'yellow';
+  return 'red';
+}
+
+function dotHtml(ms) {
+  var cls = ageClass(ms);
+  if (!cls) return '';
+  return '<span class="age-dot ' + cls + '"></span>';
+}
+
+function boolVal(v) { return v >= 0.5 ? t('data.yes') : t('data.no'); }
+
+function getRows() {
+  return [
+    { sep: t('data.sep_vehicle') },
+    { label: t('data.soc'),       key: 'soc',            fmt: function(v){return v.toFixed(1);}, unit: '%' },
+    { label: t('data.voltage'),    key: 'voltage',        fmt: function(v){return v.toFixed(1);}, unit: 'V' },
+    { label: t('data.current_a'),  key: 'current',        fmt: function(v){return v.toFixed(1);}, unit: 'A' },
+    { label: t('data.power'),      key: 'power',          fmt: function(v){return v.toFixed(1);}, unit: 'kW' },
+    { label: t('data.speed'),      key: 'vehicle_speed',  fmt: function(v){return Math.round(v);}, unit: 'km/h' },
+    { label: t('data.batt_temp'),  key: 'batt_temp',      fmt: function(v){return v.toFixed(1);}, unit: '\u00b0C' },
+    { label: t('data.ext_temp'),   key: 'ext_temp',       fmt: function(v){return v.toFixed(1);}, unit: '\u00b0C' },
+    { label: t('data.capacity'),   key: 'capacity',       fmt: function(v){return v.toFixed(1);}, unit: 'kWh' },
+    { label: t('data.charged'),    key: 'kwh_charged',    fmt: function(v){return v.toFixed(2);}, unit: 'kWh' },
+    { label: t('data.charging'),   key: 'is_charging',    fmt: boolVal, unit: '' },
+    { label: t('data.dcfc'),       key: 'is_dcfc',        fmt: boolVal, unit: '' },
+    { label: t('data.parked'),     key: 'is_parked',      fmt: boolVal, unit: '' },
+    { label: t('data.odometer'),   key: 'odometer',       fmt: function(v){return Math.round(v);}, unit: 'km' },
+    { label: t('data.range'),      key: 'range',          fmt: function(v){return Math.round(v);}, unit: 'km' },
+    { sep: t('data.sep_sensors') },
+    { label: t('data.gps'),       key: ['gps_lat','gps_lon','gps_valid'],
+      fmt: function(lat,lon,gv){ return gv >= 0.5 ? lat.toFixed(6)+' '+lon.toFixed(6) : t('data.gps_nofix'); },
+      unit: '' },
+    { label: t('data.gyro'),      key: 'gyro_g',         fmt: function(v){return v.toFixed(3);}, unit: 'G' },
+    { label: t('data.lte_sig'),   key: 'lte_signal',     fmt: function(v){return Math.round(v)+' / 31';}, unit: '' },
+    { label: t('data.lte_op'),    key: 'lte_operator',   fmt: function(v,f){return f.str || '\u2014';}, unit: '' },
+    { sep: t('data.sep_device') },
+    { label: t('data.batt_device'), key: 'batt_device',  fmt: function(v){return Math.round(v);}, unit: '%' },
+    { sep: t('data.sep_mqtt') },
+    { label: t('data.mqtt_conn'), key: '_mqtt',      fmt: function(v){return v ? t('data.mqtt_connected') : t('data.mqtt_disconnected');}, unit: '' },
+    { label: t('data.buf_pending'), key: '_buf_pending',  fmt: function(v){return Math.round(v);}, unit: '' },
+  ];
+}
+
+function buildTable(data) {
+  var f = data.fields || {};
+  var ROWS = getRows();
+  var html = '';
+
+  for (var ri = 0; ri < ROWS.length; ri++) {
+    var row = ROWS[ri];
+    if (row.sep !== undefined) {
+      html += '<tr class="sep"><td colspan="4" style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px">' + row.sep + '</td></tr>';
+      continue;
+    }
+
+    var valStr = '\u2014';
+    var ageMs  = NEVER;
+
+    if (row.key === '_mqtt') {
+      valStr  = data.mqtt_ok ? t('data.mqtt_connected') : t('data.mqtt_disconnected');
+      ageMs   = 0;
+    } else if (row.key === '_buf_pending') {
+      valStr  = String(data.buf_pending ?? 0);
+      ageMs   = 0;
+    } else if (Array.isArray(row.key)) {
+      var fields = row.key.map(function(k){ return f[k]; });
+      ageMs   = Math.max.apply(null, fields.map(function(x){ return x ? x.age_ms : NEVER; }));
+      if (ageMs < NEVER) {
+        var vals = fields.map(function(x){ return parseFloat(x.v); });
+        try { valStr = row.fmt.apply(null, vals) + (row.unit ? ' '+row.unit : ''); }
+        catch(e) { valStr = '\u2014'; }
+      }
+    } else {
+      var fd = f[row.key];
+      if (fd) {
+        ageMs = fd.age_ms;
+        if (ageMs < NEVER) {
+          var v = parseFloat(fd.v);
+          try { valStr = row.fmt(v, fd) + (row.unit ? ' '+row.unit : ''); }
+          catch(e) { valStr = '\u2014'; }
+        }
+      }
+    }
+
+    var ageTxt = fmtAge(ageMs);
+    var dot    = dotHtml(ageMs);
+    var naClass= (ageMs >= NEVER) ? ' na' : '';
+
+    html += '<tr>' +
+      '<td class="field-name">' + row.label + '</td>' +
+      '<td class="field-val' + naClass + '">' + valStr + '</td>' +
+      '<td class="field-age">' + (ageMs < NEVER ? ageTxt : '') + '</td>' +
+      '<td style="text-align:center">' + dot + '</td>' +
+    '</tr>';
+  }
+
+  document.getElementById('tbl-body').innerHTML = html;
+}
+
+// ── Auto-Refresh alle 3 s ────────────────────────────────
+var _telemTimer;
+
+async function fetchTelemetry() {
+  var dot = document.getElementById('fetch-dot');
+  var txt = document.getElementById('fetch-txt');
+  var ts  = document.getElementById('fetch-ts');
+  try {
+    var data = await (await fetch('/api/telemetry')).json();
+    buildTable(data);
+    dot.className = 'status-dot ok';
+    txt.textContent = t('data.current');
+    var d = new Date();
+    ts.textContent = d.getHours().toString().padStart(2,'0')+':'+
+                     d.getMinutes().toString().padStart(2,'0')+':'+
+                     d.getSeconds().toString().padStart(2,'0');
+  } catch(e) {
+    dot.className = 'status-dot';
+    txt.textContent = t('data.conn_err');
+  }
+}
+
+fetchTelemetry();
+_telemTimer = setInterval(fetchTelemetry, 3000);
+
+window.addEventListener('pagehide', function(){ clearInterval(_telemTimer); });
+window.addEventListener('pageshow', function(e){
+  if (e.persisted) {
+    clearInterval(_telemTimer);
+    _telemTimer = setInterval(fetchTelemetry, 3000);
+    fetchTelemetry();
+  }
+});
+</script>
+</body>
+</html>

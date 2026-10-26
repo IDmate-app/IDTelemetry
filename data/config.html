@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Telemetry Stick · Config</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@700;800&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="/style.css">
+<style>
+.ota-drop{border:2px dashed var(--border);border-radius:6px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.ota-drop:hover,.ota-drop.drag{border-color:var(--accent);background:rgba(0,229,255,.04)}
+.ota-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.ota-prog{height:6px;border-radius:3px;background:var(--bg3);margin-top:12px;overflow:hidden;display:none}
+.ota-prog-bar{height:100%;width:0;background:var(--accent);transition:width .2s;border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow1">
+    <button type="button" class="burger-btn" onclick="toggleMenu(event)">&#9776;</button>
+    <div class="logo">TS<span>.</span>CONFIG <span id="fw-ver" style="font-size:9px;color:var(--muted);font-weight:400"></span></div>
+    <span style="flex:1"></span>
+    <div class="led-g"><div class="led" id="led-gps"></div><span class="led-lbl">GPS</span></div>
+    <div class="modem-w">
+      <div class="modem-bars">
+        <div class="modem-bar bar1" id="mb1"></div>
+        <div class="modem-bar bar2" id="mb2"></div>
+        <div class="modem-bar bar3" id="mb3"></div>
+        <div class="modem-bar bar4" id="mb4"></div>
+        <div class="modem-bar bar5" id="mb5"></div>
+      </div>
+      <div class="modem-op" id="modem-op">--</div>
+    </div>
+    <nav class="drop-nav" id="drop-nav" style="display:none">
+      <a href="/daten" data-i18n="nav.data">DATA</a>
+      <a href="/debug" data-i18n="nav.debug">DEBUG</a>
+      <a href="/config" class="active" data-i18n="nav.config">CONFIG</a>
+    </nav>
+  </div>
+  <div class="hrow2">
+    <div class="led-g"><div class="led blue" id="led-can"></div><span class="led-lbl">CAN</span></div>
+    <div class="led-g"><div class="led" id="led-mqtt"></div><span class="led-lbl">MQTT</span></div>
+    <div class="led-g"><div class="led" id="led-lte"></div><span class="led-lbl">LTE</span></div>
+    <div class="led-g" style="min-width:38px"><span id="batt-pct" style="font-size:10px;font-weight:700;color:var(--muted)">--</span><span class="led-lbl">BAT</span></div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Sprache -->
+  <div class="section-title" data-i18n="cfg.lang_title">Sprache / Language</div>
+  <div class="card">
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.lang_label">Sprache</div>
+      <select id="lang" style="width:100%;padding:6px 8px;background:var(--card);color:var(--fg);border:1px solid #333;border-radius:4px;font-size:12px">
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- WiFi Access Point -->
+  <div class="section-title" data-i18n="cfg.wifi_title">WiFi Access Point</div>
+  <div class="card">
+    <div class="row2">
+      <div class="field">
+        <div class="lbl">SSID</div>
+        <input type="text" id="ap_ssid" placeholder="TelemetryStick">
+      </div>
+      <div class="field">
+        <div class="lbl" data-i18n="cfg.wifi_pass">Passwort</div>
+        <div style="display:flex;gap:6px">
+          <input type="password" id="ap_pass" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" autocomplete="new-password" style="flex:1">
+          <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="togglePw('ap_pass', this)" title="show / hide">&#128065;</button>
+        </div>
+      </div>
+    </div>
+    <div class="hint warn" data-i18n="cfg.wifi_hint">&#9888; AP-Name und Passwort werden erst nach Neustart aktiv.</div>
+  </div>
+
+  <!-- SIM / APN -->
+  <div class="section-title" data-i18n="cfg.apn_title">SIM / APN</div>
+  <div class="card">
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.sim_pin">SIM PIN</div>
+      <div style="display:flex;gap:6px">
+        <input type="password" id="sim_pin" placeholder="&#8226;&#8226;&#8226;&#8226;" maxlength="8" autocomplete="off" style="flex:1">
+        <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="togglePw('sim_pin', this)" title="show / hide">&#128065;</button>
+      </div>
+      <div class="hint" data-i18n="cfg.sim_pin_hint">4-8 Ziffern. Leer lassen wenn kein PIN n&#246;tig. Nach 3 Fehlversuchen wird die SIM mit PUK gesperrt!</div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <div class="lbl">APN</div>
+        <input type="text" id="apn" placeholder="internet">
+      </div>
+      <div class="field">
+        <div class="lbl" data-i18n="cfg.apn_user">APN Benutzer</div>
+        <input type="text" id="apn_user" data-i18n-ph="cfg.apn_ph" placeholder="(leer lassen wenn nicht n&#246;tig)">
+      </div>
+    </div>
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.apn_pass">APN Passwort</div>
+      <div style="display:flex;gap:6px">
+        <input type="password" id="apn_pass" data-i18n-ph="cfg.apn_ph" placeholder="(leer lassen wenn nicht n&#246;tig)" autocomplete="new-password" style="flex:1">
+        <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="togglePw('apn_pass', this)" title="show / hide">&#128065;</button>
+      </div>
+    </div>
+    <div class="hint warn" data-i18n="cfg.apn_hint">&#9888; SIM PIN und APN-&#196;nderungen werden erst nach Neustart vom Modem &#252;bernommen.</div>
+  </div>
+
+  <!-- MQTT -->
+  <div class="section-title" data-i18n="cfg.mq_title">MQTT Broker</div>
+  <div class="card">
+    <div class="row2">
+      <div class="field" style="flex:3">
+        <div class="lbl" data-i18n="cfg.mq_host_label">Host</div>
+        <input type="text" id="mq_host" placeholder="broker.example.com">
+      </div>
+      <div class="field" style="flex:1">
+        <div class="lbl" data-i18n="cfg.mq_port_label">Port</div>
+        <input type="number" id="mq_port" placeholder="1883">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <div class="lbl" data-i18n="cfg.mq_user_label">Username</div>
+        <input type="text" id="mq_user" placeholder="(leer = keine Auth)">
+      </div>
+      <div class="field">
+        <div class="lbl" data-i18n="cfg.mq_pass_label">Passwort</div>
+        <div style="display:flex;gap:6px">
+          <input type="password" id="mq_pass" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" autocomplete="new-password" style="flex:1">
+          <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="togglePw('mq_pass', this)" title="show / hide">&#128065;</button>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.mq_topic_label">Topic-Prefix</div>
+      <input type="text" id="mq_topic" placeholder="tele/vw_nox">
+    </div>
+    <div class="hint" data-i18n="cfg.mq_hint">Publishes auf {prefix}/data. Port 8883 aktiviert TLS automatisch.</div>
+    <div class="field" style="margin-top:10px">
+      <div class="lbl" data-i18n="cfg.aes_label">AES-256 Key (64 hex chars)</div>
+      <div style="display:flex;gap:6px">
+        <input type="password" id="aes_key" placeholder="(leer = secrets.h Default)" autocomplete="new-password" style="flex:1">
+        <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="togglePw('aes_key', this)" title="show / hide">&#128065;</button>
+      </div>
+    </div>
+    <div class="hint" data-i18n="cfg.aes_hint">Optional: &#252;berschreibt den im Firmware-Binary eingebauten Schl&#252;ssel. Leer lassen f&#252;r Default aus <code>secrets.h</code>.</div>
+  </div>
+
+  <!-- WiFi Upload (STA, two priority slots) -->
+  <div class="section-title" data-i18n="cfg.sta_title">WiFi Upload (STA)</div>
+  <div class="card">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px" data-i18n="cfg.sta_intro">
+      Zwei Slots in Priorit&#228;tsreihenfolge. Stick scannt periodisch und verbindet sich
+      mit dem ersten Slot, dessen SSID in Reichweite ist. Slot 1 schl&#228;gt Slot 2 bei
+      Gleichstand. Leere SSID = Slot deaktiviert.
+    </div>
+
+    <div style="font-size:12px;font-weight:600;margin:8px 0 4px" data-i18n="cfg.sta_slot1_label">Slot 1 (z.B. Heim-WiFi)</div>
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.sta_ssid_label">SSID</div>
+      <input type="text" id="sta_ssid" placeholder="(leer = Slot aus)">
+    </div>
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.sta_pass_label">Password</div>
+      <div style="display:flex;gap:6px">
+        <input type="password" id="sta_pass" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" autocomplete="new-password" style="flex:1">
+        <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="togglePw('sta_pass', this)" title="show / hide">&#128065;</button>
+      </div>
+    </div>
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.sta_url_label">Upload URL</div>
+      <input type="text" id="upload_url" placeholder="https://idmate.example.com/api/ingest">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+      <button type="button" class="btn" style="font-size:10px;padding:4px 10px"
+              onclick="fillMqttUrl('upload_url')" data-i18n="cfg.sta_use_mqtt">&#8635; Use MQTT settings</button>
+      <button type="button" class="btn" style="font-size:10px;padding:4px 10px"
+              onclick="testWifi(0)" data-i18n="cfg.sta_test1">&#9889; Test Slot 1</button>
+      <span id="wifi-test-0" style="font-size:10px;color:var(--muted);align-self:center"></span>
+    </div>
+
+    <div style="font-size:12px;font-weight:600;margin:14px 0 4px" data-i18n="cfg.sta_slot2_label">Slot 2 (z.B. Handy-Hotspot)</div>
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.sta_ssid_label">SSID</div>
+      <input type="text" id="sta_ssid_2" placeholder="(leer = Slot aus)">
+    </div>
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.sta_pass_label">Password</div>
+      <div style="display:flex;gap:6px">
+        <input type="password" id="sta_pass_2" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" autocomplete="new-password" style="flex:1">
+        <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="togglePw('sta_pass_2', this)" title="show / hide">&#128065;</button>
+      </div>
+    </div>
+    <div class="field">
+      <div class="lbl" data-i18n="cfg.sta_url_label">Upload URL</div>
+      <input type="text" id="upload_url_2" placeholder="https://idmate.example.com/api/ingest">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+      <button type="button" class="btn" style="font-size:10px;padding:4px 10px"
+              onclick="fillMqttUrl('upload_url_2')" data-i18n="cfg.sta_use_mqtt">&#8635; Use MQTT settings</button>
+      <button type="button" class="btn" style="font-size:10px;padding:4px 10px"
+              onclick="testWifi(1)" data-i18n="cfg.sta_test2">&#9889; Test Slot 2</button>
+      <span id="wifi-test-1" style="font-size:10px;color:var(--muted);align-self:center"></span>
+    </div>
+
+    <div class="hint" style="margin-top:10px" data-i18n-html="cfg.sta_hint">
+      URL-Schema: <code>http(s)://host/path</code> oder <code>mqtt(s)://host:port/topic</code>.<br>
+      „Use MQTT settings" f&#252;llt die URL aus den MQTT-Broker-Feldern oben — gleicher Broker wie LTE, gleicher Server-Decoder.<br>
+      Full-Variante: WiFi-Upload l&#228;uft parallel zum LTE-MQTT-Pfad als Absicherung.
+      Lite-Variante: WiFi-Upload ist der einzige Pfad — beide Slots leer = keine Daten weg.
+    </div>
+  </div>
+
+  <!-- BLE Standby -->
+  <div class="section-title" data-i18n="cfg.ble_title">BLE / ABRP</div>
+  <div class="card">
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+      <input type="checkbox" id="ble_standby" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.ble_standby">Standby-Defaults senden</span>
+    </label>
+    <div class="hint" data-i18n="cfg.ble_hint">Wenn aktiv, bekommt ABRP auch ohne CAN-Verbindung plausible Standwerte (0 km/h, 80% SoC etc.) und kann sich verbinden. Deaktiviert: ABRP bekommt "NO DATA" wenn kein CAN.</div>
+  </div>
+
+  <!-- GPS Quelle + Module -->
+  <div class="section-title" data-i18n="cfg.gps_title">GPS-Quelle &amp; Module</div>
+  <div class="card">
+    <div style="font-size:12px;font-weight:600;margin-bottom:6px" data-i18n="cfg.gps_source">GPS source</div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:6px">
+      <input type="radio" name="gps_src" id="gps_src_ext" value="ext" style="accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n-html="cfg.gps_ext">External GNSS (BLITZ Mini M10, UART) &mdash; <em>recommended</em></span>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:6px">
+      <input type="radio" name="gps_src" id="gps_src_int" value="int" style="accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.gps_int">Internal GNSS (SIM7080G) &mdash; full variant only</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px">
+      <input type="radio" name="gps_src" id="gps_src_off" value="off" style="accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.gps_off">Off</span>
+    </label>
+    <div class="hint" style="margin-bottom:12px" data-i18n="cfg.gps_hint">
+      External M10 is preferred &mdash; it keeps a fix while LTE runs (shared radio limits in SIM7080G internal GNSS).
+      Lite variant must use external (no internal GNSS available).
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+      <input type="checkbox" id="mod_compass" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.compass_label">Compass (QMC5883L on BLITZ M10)</span>
+    </label>
+    <div class="hint" data-i18n="cfg.compass_hint">Compass on I2C Wire0 (GPIO45/21). Disable if not fitted.</div>
+  </div>
+
+  <!-- SPIFFS Logs -->
+  <div class="section-title" data-i18n="cfg.log_title">SPIFFS Logging</div>
+  <div class="card">
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px">
+      <input type="checkbox" id="log_can" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.log_can">CAN / ELM Log</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+      <input type="checkbox" id="log_ble" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.log_ble">BLE Log</span>
+    </label>
+    <div class="hint" data-i18n="cfg.log_hint">Aktiviert SPIFFS-Logging f&#252;r CAN/ELM327, BLE-Ger&#228;te bzw. WiFi-Scans. Syslog (System-Events) l&#228;uft immer.</div>
+  </div>
+
+  <!-- Speichern -->
+  <div style="display:flex;gap:10px;align-items:center;margin-top:16px;margin-bottom:4px">
+    <button class="btn accent" onclick="saveConfig()" id="btn-save" data-i18n="cfg.save">&#10003; Speichern</button>
+    <button class="btn" onclick="loadConfig()" style="font-size:10px" data-i18n="cfg.reload">&#8635; Neu laden</button>
+    <span id="save-status" style="font-size:11px;color:var(--muted)"></span>
+  </div>
+  <div class="hint" style="margin-bottom:24px" data-i18n="cfg.save_hint">
+    Werte werden sofort im NVS gespeichert. F&#252;r APN und AP-SSID/Passwort ist ein Neustart n&#246;tig.
+  </div>
+
+  <!-- Firmware OTA -->
+  <div class="section-title" data-i18n="cfg.ota_title">Firmware Update (OTA)</div>
+  <div class="card">
+    <div class="ota-drop" id="ota-drop">
+      <input type="file" id="ota-file" accept=".bin">
+      <div style="font-size:12px;color:var(--muted)">
+        <span style="font-size:18px;display:block;margin-bottom:6px">&#128190;</span>
+        <span data-i18n="cfg.ota_drop">.bin Datei hier ablegen oder klicken</span><br>
+        <span style="font-size:10px" data-i18n="cfg.ota_drop_sub">(PlatformIO: .pio/build/&lt;env&gt;/firmware.bin)</span>
+      </div>
+    </div>
+    <div class="ota-prog" id="ota-prog"><div class="ota-prog-bar" id="ota-bar"></div></div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn green" onclick="startOta()" id="btn-ota" disabled data-i18n="cfg.ota_flash">&#8593; Flash</button>
+      <span id="ota-status" style="font-size:11px;color:var(--muted)" data-i18n="cfg.ota_none">Keine Datei ausgew&#228;hlt</span>
+    </div>
+    <div class="hint warn" style="margin-top:8px" data-i18n="cfg.ota_hint">
+      &#9888; Das Ger&#228;t startet nach erfolgreichem Upload automatisch neu. WLAN-Verbindung wird kurz unterbrochen.
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/common.js"></script>
+<script src="/i18n.js"></script>
+<script>
+// ── Status Polling ───────────────────────────────────────
+async function fetchStatus(){
+  try{
+    var d=await(await fetch('/status')).json();
+    if(d.fw_version){var v=document.getElementById('fw-ver');if(v)v.textContent='v'+d.fw_version;}
+    setLed('can',d.can_ok?'green':'blue');
+    setLed('gps',d.gps_valid?'green':'');
+    setLed('lte',d.modem_ok?'green':'');
+    setBatt(d.batt_pct??-1,d.charging??false,d.vbus_in??false);
+    updateModem(d.modem_sig??-1,d.modem_op??'',d.modem_sim??false,d.modem_ok??false);
+  }catch(e){}
+  try{
+    var ti=await(await fetch('/api/telemetry')).json();
+    setLed('mqtt',ti.mqtt_ok?'green':'');
+  }catch(e){}
+}
+fetchStatus();
+var _stTimer=setInterval(fetchStatus,8000);
+
+// ── WiFi-Upload Helpers ─────────────────────────────────
+// Fill an Upload-URL field from the MQTT-Broker settings above.
+// Result: mqtt://{host}:{port}/{topic}/data — exactly what the LTE path publishes to.
+function fillMqttUrl(targetId) {
+  var host  = document.getElementById('mq_host').value.trim();
+  var port  = parseInt(document.getElementById('mq_port').value) || 1883;
+  var topic = document.getElementById('mq_topic').value.trim();
+  if (!host || !topic) {
+    toast(t('cfg.mq_url_need_host'), false);
+    return;
+  }
+  var scheme = port === 8883 ? 'mqtts' : 'mqtt';
+  document.getElementById(targetId).value = scheme + '://' + host + ':' + port + '/' + topic + '/data';
+}
+
+// Trigger a WiFi-upload test for the given slot. The actual connect + publish
+// is async on the device; we just kick it off and let the user watch the
+// syslog on the Debug page.
+async function testWifi(slot) {
+  var status = document.getElementById('wifi-test-' + slot);
+  // Heads up — share radio: AP will wobble while the stick joins the slot.
+  if (!confirm(t('cfg.wifi_test_confirm'))) {
+    if (status) { status.textContent = t('cfg.wifi_test_aborted'); status.style.color = 'var(--muted)'; }
+    return;
+  }
+  if (status) { status.textContent = t('cfg.wifi_test_running'); status.style.color = 'var(--muted)'; }
+  // Save current values first so the test uses what the user just typed.
+  try { await saveConfig(); } catch (e) {}
+  try {
+    var r = await fetch('/api/wifi-test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({slot: slot})
+    });
+    var d = await r.json();
+    if (status) {
+      status.textContent = d.ok
+        ? t('cfg.wifi_test_started')
+        : '✗ ' + (d.err || t('cfg.wifi_test_failed'));
+      status.style.color = d.ok ? 'var(--green)' : 'var(--red)';
+    }
+  } catch (e) {
+    if (status) {
+      // Wir EXPECT eine Trennung — die meldet sich als fetch-error.
+      // Das ist eigentlich der gute Fall: Test läuft, AP ist gerade weg.
+      status.textContent = t('cfg.wifi_test_ap_gone');
+      status.style.color = 'var(--muted)';
+    }
+  }
+}
+
+// ── Config laden ─────────────────────────────────────────
+async function loadConfig(){
+  try{
+    var d=await(await fetch('/api/config')).json();
+    document.getElementById('ap_ssid').value   = d.ap_ssid  || '';
+    document.getElementById('ap_pass').value   = d.ap_pass  || '';
+    document.getElementById('sim_pin').value   = d.sim_pin  || '';
+    document.getElementById('apn').value       = d.apn      || '';
+    document.getElementById('apn_user').value  = d.apn_user || '';
+    document.getElementById('apn_pass').value  = d.apn_pass || '';
+    document.getElementById('mq_host').value   = d.mq_host  || '';
+    document.getElementById('mq_port').value   = d.mq_port  || 1883;
+    document.getElementById('mq_user').value   = d.mq_user  || '';
+    document.getElementById('mq_pass').value   = d.mq_pass  || '';
+    document.getElementById('mq_topic').value  = d.mq_topic || '';
+    document.getElementById('aes_key').value   = d.aes_key  || '';
+    document.getElementById('sta_ssid').value  = d.sta_ssid || '';
+    document.getElementById('sta_pass').value  = d.sta_pass || '';
+    document.getElementById('upload_url').value= d.upload_url || '';
+    document.getElementById('sta_ssid_2').value  = d.sta_ssid_2 || '';
+    document.getElementById('sta_pass_2').value  = d.sta_pass_2 || '';
+    document.getElementById('upload_url_2').value= d.upload_url_2 || '';
+    document.getElementById('ble_standby').checked = d.ble_standby !== false;
+    // GPS source: priorise gps_src field, fall back to legacy mod_gps boolean.
+    var src = d.gps_src || (d.mod_gps === false ? 'off' : 'int');
+    var rb = document.getElementById('gps_src_' + src);
+    if (rb) rb.checked = true;
+    document.getElementById('mod_compass').checked = d.mod_compass === true;
+    document.getElementById('log_can').checked = d.log_can === true;
+    document.getElementById('log_ble').checked = d.log_ble === true;
+    document.getElementById('lang').value = d.lang || 'de';
+    document.getElementById('save-status').textContent=t('cfg.loaded');
+    setTimeout(function(){document.getElementById('save-status').textContent='';},1500);
+  }catch(e){
+    toast(t('cfg.load_err'),false);
+  }
+}
+
+// ── Config speichern ─────────────────────────────────────
+async function saveConfig(){
+  var btn=document.getElementById('btn-save');
+  btn.disabled=true;
+  var payload={
+    ap_ssid:   document.getElementById('ap_ssid').value.trim(),
+    ap_pass:   document.getElementById('ap_pass').value,
+    sim_pin:   document.getElementById('sim_pin').value.trim(),
+    apn:       document.getElementById('apn').value.trim(),
+    apn_user:  document.getElementById('apn_user').value.trim(),
+    apn_pass:  document.getElementById('apn_pass').value,
+    mq_host:   document.getElementById('mq_host').value.trim(),
+    mq_port:   parseInt(document.getElementById('mq_port').value) || 1883,
+    mq_user:   document.getElementById('mq_user').value.trim(),
+    mq_pass:   document.getElementById('mq_pass').value,
+    mq_topic:  document.getElementById('mq_topic').value.trim(),
+    aes_key:   document.getElementById('aes_key').value.trim(),
+    sta_ssid:    document.getElementById('sta_ssid').value.trim(),
+    sta_pass:    document.getElementById('sta_pass').value,
+    upload_url:  document.getElementById('upload_url').value.trim(),
+    sta_ssid_2:  document.getElementById('sta_ssid_2').value.trim(),
+    sta_pass_2:  document.getElementById('sta_pass_2').value,
+    upload_url_2:document.getElementById('upload_url_2').value.trim(),
+    ble_standby:  document.getElementById('ble_standby').checked,
+    gps_src:      (document.querySelector('input[name=gps_src]:checked') || {}).value || 'ext',
+    mod_compass:  document.getElementById('mod_compass').checked,
+    log_can:      document.getElementById('log_can').checked,
+    log_ble:      document.getElementById('log_ble').checked,
+    lang:         document.getElementById('lang').value,
+  };
+  try{
+    var r=await fetch('/api/config',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    var d=await r.json();
+    if(d.ok){
+      toast(t('cfg.saved'));
+      document.getElementById('save-status').textContent=t('cfg.saved_status');
+    }else{
+      toast(t('cfg.save_err'),false);
+    }
+  }catch(e){
+    toast(t('cfg.conn_err'),false);
+  }
+  btn.disabled=false;
+}
+
+// ── OTA Upload ───────────────────────────────────────────
+var _otaFile=null;
+
+document.getElementById('ota-file').addEventListener('change',function(){
+  _otaFile=this.files[0]||null;
+  var st=document.getElementById('ota-status');
+  var btn=document.getElementById('btn-ota');
+  if(_otaFile){
+    st.textContent=_otaFile.name+' ('+(_otaFile.size/1024).toFixed(1)+' kB)';
+    btn.disabled=false;
+  }else{
+    st.textContent=t('cfg.ota_none');
+    btn.disabled=true;
+  }
+});
+
+(function(){
+  var drop=document.getElementById('ota-drop');
+  drop.addEventListener('dragover',function(e){e.preventDefault();drop.classList.add('drag');});
+  drop.addEventListener('dragleave',function(){drop.classList.remove('drag');});
+  drop.addEventListener('drop',function(e){
+    e.preventDefault();drop.classList.remove('drag');
+    var f=e.dataTransfer.files[0];
+    if(f&&f.name.endsWith('.bin')){
+      _otaFile=f;
+      document.getElementById('ota-status').textContent=f.name+' ('+(f.size/1024).toFixed(1)+' kB)';
+      document.getElementById('btn-ota').disabled=false;
+    }else{
+      toast(t('cfg.ota_only_bin'),false);
+    }
+  });
+})();
+
+async function startOta(){
+  if(!_otaFile){toast(t('cfg.ota_no_file'),false);return;}
+  var btn=document.getElementById('btn-ota');
+  var st=document.getElementById('ota-status');
+  var prog=document.getElementById('ota-prog');
+  var bar=document.getElementById('ota-bar');
+  btn.disabled=true;
+  prog.style.display='block';
+  bar.style.width='0%';
+  st.style.color='var(--accent)';
+  st.textContent=t('cfg.ota_uploading');
+
+  var form=new FormData();
+  form.append('firmware',_otaFile,_otaFile.name);
+
+  var xhr=new XMLHttpRequest();
+  xhr.open('POST','/api/ota');
+
+  xhr.upload.onprogress=function(e){
+    if(e.lengthComputable){
+      var pct=Math.round(e.loaded/e.total*100);
+      bar.style.width=pct+'%';
+      st.textContent=t('cfg.ota_progress',[pct]);
+    }
+  };
+
+  xhr.onload=function(){
+    try{
+      var d=JSON.parse(xhr.responseText);
+      if(d.ok){
+        bar.style.width='100%';
+        bar.style.background='var(--green)';
+        st.style.color='var(--green)';
+        st.textContent=t('cfg.ota_ok');
+        toast(t('cfg.ota_flashed'));
+      }else{
+        st.style.color='var(--red)';
+        st.textContent='\u2717 '+t('cfg.ota_fail');
+        toast(t('cfg.ota_fail'),false);
+        btn.disabled=false;
+      }
+    }catch(_){
+      st.style.color='var(--red)';
+      st.textContent=t('cfg.ota_reboot_noresp');
+      toast(t('cfg.ota_reboot'));
+    }
+  };
+
+  xhr.onerror=function(){
+    st.style.color='var(--green)';
+    st.textContent=t('cfg.ota_reboot_reload');
+    bar.style.width='100%';
+    bar.style.background='var(--green)';
+    setTimeout(function(){location.reload();},10000);
+  };
+
+  xhr.send(form);
+}
+
+// ── Init ─────────────────────────────────────────────────
+loadConfig();
+
+</script>
+</body>
+</html>

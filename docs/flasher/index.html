@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IDTelemetry Web Flasher</title>
+  <script type="module"
+          src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module">
+  </script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #1f2328;
+      --muted: #57606a;
+      --border: #d0d7de;
+      --accent: #0969da;
+      --card: #f6f8fa;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      color: var(--fg);
+      background: var(--bg);
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2rem 1rem 4rem;
+      line-height: 1.5;
+    }
+    h1 { margin-top: 0; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    code { background: var(--card); padding: .1rem .3rem; border-radius: 4px; font-size: 0.95em; }
+    .row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .muted { color: var(--muted); font-size: 0.92em; }
+    a { color: var(--accent); }
+    esp-web-install-button { --esp-tools-button-color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<h1>IDTelemetry — Web Flasher</h1>
+<p class="muted">
+  Flash the firmware to your stick directly from this page — no toolchain needed.
+  Works in Chrome and Edge on Desktop (uses WebSerial API).
+</p>
+
+<h2>Full version (LILYGO T-SIM7080G-S3)</h2>
+<div class="card">
+  <p>Production firmware with LTE-M modem, external GNSS, PMU and battery support.</p>
+  <div class="row">
+    <esp-web-install-button manifest="manifest_full.json"></esp-web-install-button>
+    <span class="muted">requires LILYGO T-SIM7080G-S3 board</span>
+  </div>
+</div>
+
+<h2>Lite version (plain ESP32-S3)</h2>
+<div class="card">
+  <p>BLE ELM327 + CAN + WiFi-only telemetry buffer. Status: preparation, not production-ready.</p>
+  <div class="row">
+    <esp-web-install-button manifest="manifest_lite.json"></esp-web-install-button>
+    <span class="muted">requires ESP32-S3-N16R8 board (16 MB flash, 8 MB PSRAM)</span>
+  </div>
+</div>
+
+<h2>How does this work?</h2>
+<p>
+  <a href="https://esphome.github.io/esp-web-tools/" target="_blank">ESP Web Tools</a>
+  uses the WebSerial API to talk to your stick over USB and upload the firmware
+  binary. Nothing leaves your browser — there is no server in the loop. The
+  binaries served from this page are the artefacts published in the
+  <a href="https://github.com/IDmate-app/IDTelemetry/releases" target="_blank">GitHub Releases</a>.
+</p>
+
+<h2>Browser support</h2>
+<p>
+  Chrome 89+, Edge 89+, Opera. Not supported on Firefox or Safari yet.
+  iOS / iPadOS cannot flash because WebSerial is not available there.
+</p>
+
+<h2>Trouble?</h2>
+<ul>
+  <li>Make sure the USB cable is a <em>data</em> cable, not charge-only.</li>
+  <li>If no port appears, install the ESP32-S3 USB-JTAG/CDC driver (Windows).</li>
+  <li>If the flash fails mid-way, hold the BOOT button while clicking <em>Install</em>.</li>
+</ul>
+
+</body>
+</html>

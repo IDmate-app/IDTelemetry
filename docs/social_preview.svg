@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e0e12"/>
+      <stop offset="100%" stop-color="#1a1a22"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2EE6A6"/>
+      <stop offset="100%" stop-color="#3DB7E4"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2a2a35" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)" opacity="0.6"/>
+
+  <!-- Accent corners -->
+  <rect x="0" y="0" width="1280" height="6" fill="url(#accent)"/>
+  <rect x="0" y="634" width="1280" height="6" fill="url(#accent)"/>
+
+  <!-- Title block -->
+  <g transform="translate(80, 180)">
+    <text x="0" y="0" font-family="Helvetica, Arial, sans-serif" font-size="120" font-weight="700" fill="#E8E8EE">
+      ID<tspan fill="#2EE6A6">Telemetry</tspan>
+    </text>
+
+    <text x="0" y="80" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="400" fill="#9aa0a6">
+      Open telemetry for the VW ID family
+    </text>
+
+    <text x="0" y="180" font-family="Helvetica, Arial, sans-serif" font-size="26" font-weight="400" fill="#cfd1d6">
+      Your data.  Your broker.  Your dashboard.
+    </text>
+
+    <!-- Feature pills -->
+    <g transform="translate(0, 240)" font-family="Menlo, monospace" font-size="20" fill="#2EE6A6">
+      <g>
+        <rect x="0" y="-22" width="120" height="34" rx="17" fill="none" stroke="#2EE6A6" stroke-width="1.5"/>
+        <text x="60" y="2" text-anchor="middle">CAN bus</text>
+      </g>
+      <g transform="translate(140, 0)">
+        <rect x="0" y="-22" width="160" height="34" rx="17" fill="none" stroke="#2EE6A6" stroke-width="1.5"/>
+        <text x="80" y="2" text-anchor="middle">LTE-M MQTT</text>
+      </g>
+      <g transform="translate(320, 0)">
+        <rect x="0" y="-22" width="170" height="34" rx="17" fill="none" stroke="#2EE6A6" stroke-width="1.5"/>
+        <text x="85" y="2" text-anchor="middle">BLE ELM327</text>
+      </g>
+      <g transform="translate(510, 0)">
+        <rect x="0" y="-22" width="160" height="34" rx="17" fill="none" stroke="#2EE6A6" stroke-width="1.5"/>
+        <text x="80" y="2" text-anchor="middle">AES-256</text>
+      </g>
+      <g transform="translate(690, 0)">
+        <rect x="0" y="-22" width="160" height="34" rx="17" fill="none" stroke="#2EE6A6" stroke-width="1.5"/>
+        <text x="80" y="2" text-anchor="middle">deep sleep</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Footer -->
+  <text x="80" y="600" font-family="Menlo, monospace" font-size="16" fill="#5a5d68">
+    github.com/IDmate-app/IDTelemetry  ·  AGPLv3
+  </text>
+</svg>

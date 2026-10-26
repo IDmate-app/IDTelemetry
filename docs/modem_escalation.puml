@@ -1,0 +1,57 @@
+@startuml modem_escalation
+!include _theme.puml
+
+title Modem / MQTT watchdog — 4-stage escalation
+
+start
+
+:MQTT publish loop;
+
+if (MQTT connected?) then (yes)
+  :send rows from cache + SPIFFS queue;
+  :reset fail_count;
+  stop
+else (no)
+endif
+
+:fail_count++;
+
+if (fail_count < 3) then (Level 1)
+  :MQTT reconnect every 10 s;
+  stop
+else (>=3)
+endif
+
+:reset_count++;
+:**Level 2** — Modem PWRKEY reset;
+:re-init: SIM ready, GPRS, MQTT;
+
+if (reset_count < 2) then (retry)
+  stop
+else (>=2)
+endif
+
+:**Level 3** — PLMN scan;
+note right
+  AT+COPS=?
+  filter against whitelist
+  (Telekom, Vodafone, o2, ...)
+end note
+:try register on next allowed PLMN;
+
+if (registered?) then (yes)
+  :reset reset_count;
+  stop
+else (no)
+endif
+
+:**Level 4** — esp_restart();
+note right
+  RTC_DATA_ATTR counter
+  max 3 reboots / 30 min
+  prevents endless loop
+end note
+
+stop
+
+@enduml

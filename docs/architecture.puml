@@ -1,0 +1,62 @@
+@startuml architecture
+!include _theme.puml
+
+title IDTelemetry — System Architecture
+
+package "Vehicle (VW ID family)" {
+  [OBD2 Port] as OBD
+}
+
+package "IDTelemetry Stick" {
+  package "ESP32-S3" {
+    [CAN / TWAI\nGPIO17/18] as CAN
+    [Modem UART1\nGPIO4/5] as ModemUART
+    [GPS UART2\nGPIO1/2] as GpsUART
+    [I2C Wire0\nGPIO45/21] as I2C0
+    [I2C Wire1\nGPIO15/7] as I2C1
+    [BLE NimBLE] as BLE
+    [WiFi AP] as AP
+    database "Telemetry Store\n5 MB raw partition\n~40k rows" as STORE
+    database "SPIFFS\n8.8 MB logs" as FS
+  }
+
+  [SN65HVD230\nCAN transceiver] as TRX
+  [SIM7080G\nLTE-M / NB-IoT] as SIM
+  [BLITZ Mini M10\nu-blox GNSS] as M10
+  [DS1307\nRTC] as RTC
+  [MPU-6050\nGyro / Accel] as IMU
+  [AXP2101\nPMU] as PMU
+  [Li-Po 2200 mAh] as BAT
+}
+
+package "Backend" {
+  cloud "MQTT broker" as MQTT
+  database "InfluxDB / Server" as DB
+  [Grafana] as GRAF
+}
+
+package "Smartphone" {
+  [ABRP app] as ABRP
+}
+
+OBD --> TRX : CAN-H/L
+TRX --> CAN
+ModemUART --> SIM
+GpsUART <-- M10
+I2C0 -- RTC
+I2C0 -- IMU
+I2C1 -- PMU
+PMU -- BAT
+PMU -- SIM : DC rails
+PMU -- M10 : DC5
+
+CAN --> STORE : telemetry rows
+STORE ..> SIM : publish
+SIM ..> MQTT : LTE-M\nAES-256-CBC
+MQTT --> DB
+DB --> GRAF
+
+BLE <..> ABRP : ELM327 emulation
+AP <..> [Browser] : config / live data
+
+@enduml
