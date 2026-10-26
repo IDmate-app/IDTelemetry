@@ -67,7 +67,7 @@ When MQTT or GPRS misbehave, the firmware escalates through four levels before g
 | MCU | LILYGO T-SIM7080G-S3 (ESP32-S3, 16 MB Flash, 8 MB PSRAM) |
 | CAN Transceiver | SN65HVD230 (3.3 V, active mode) |
 | Modem | SIM7080G (LTE-M / NB-IoT), onboard |
-| GPS + Compass | BLITZ Mini M10 (u-blox M10 multi-GNSS + QMC5883L compass) — external via UART |
+| GPS | SparkFun u-blox DAN-F10N (L1+L5 dual-band GNSS, integrated patch antenna, ML414H backup cell) — external via UART |
 | GPS (fallback) | SIM7080G integrated GNSS (used when external GPS is disabled) |
 | PMU | AXP2101 (onboard, manages DC rails for modem, GPS, peripherals) |
 | RTC | DS1307 + CR2032 (keeps time across power cycles) |
@@ -78,7 +78,15 @@ When MQTT or GPRS misbehave, the firmware escalates through four levels before g
 The firmware supports two GPS configurations controlled by `GPS_EXT_ENABLED` in `config.h`:
 
 **External GPS (default, recommended):**
-The BLITZ Mini M10 runs continuously on UART2 (GPIO1/GPIO2) and maintains a fix independently of the modem. LTE stays connected via MQTT at all times — no GPS/LTE cycling needed. The M10 draws ~5–8 mA in idle and keeps tracking even during sleep transitions. Power is supplied via the PMU DC5 rail (3.3 V).
+The DAN-F10N runs continuously on UART2 (GPIO1/GPIO2) and maintains a fix independently of the modem. LTE stays connected via MQTT at all times — no GPS/LTE cycling needed. It keeps tracking across sleep transitions; power comes from the PMU DC5 rail (3.3 V).
+
+The module reports `MOD=DAN-F10N`, `FWVER=SPGL1L5 6.00`, `PROTVER=40.00` and serves GPS, Galileo, BeiDou, SBAS, QZSS and NavIC. **GLONASS is not supported** — the F10 is an L1+L5 receiver and GLONASS L1OF broadcasts FDMA around 1602 MHz, outside the L1 filter. The firmware enables GPS + Galileo + BeiDou + SBAS (EGNOS); QZSS and NavIC are regional systems over East Asia and India and stay off at European latitudes.
+
+GPS L5 needs one extra step. L5 is still pre-operational, so the satellites broadcast themselves as unhealthy and the receiver drops them from the navigation solution. The firmware sets the undocumented health-override key `0x10320001`, measured on the device via `UBX-NAV-SIG`: GPS L5 goes from 0 to 5 satellites in the solution, total signals used 32 → 37.
+
+Field experience so far: in bad weather the dual-band receiver has been the only module to achieve a fix at all — under the same conditions neither the earlier L1-only module nor the SIM7080G's internal GNSS got one. Its ML414H backup cell keeps the receiver's RTC and ephemerides alive while the DC5 rail is switched off in sleep, which in practice delivers the first fix roughly 3 minutes earlier.
+
+> Idle current has not been measured on this module. The figure previously quoted here (~5–8 mA) came from the earlier M10 hardware and does not apply.
 
 **Internal GPS (fallback):**
 When `GPS_EXT_ENABLED` is set to `false`, the SIM7080G's built-in GNSS is used instead. Because the SIM7080G shares a single radio frontend, GPS and LTE data cannot run simultaneously. The device cycles between modes every 60 seconds:
@@ -124,7 +132,7 @@ The setup has two main paths:
 | both | MPU-6050 breakout | Accelerometer / gyroscope (I2C) | ~3 € |
 | both | USB-C cable | For flashing and power | — |
 | full | LILYGO T-SIM7080G-S3 | ESP32-S3 board with LTE-M/NB-IoT modem, AXP2101 PMU, Li-Po | ~35 € |
-| full | BLITZ Mini M10 | u-blox M10 GNSS + QMC5883L compass (UART) — recommended | ~40 € |
+| full | SparkFun u-blox DAN-F10N | L1+L5 dual-band GNSS with integrated antenna (UART) — recommended | |
 | full | LTE-M SIM card | e.g. ThingsMobile (prepaid, no contract) | ~15 € |
 | lite | ESP32-S3-DevKitC-1 (N16R8) | Plain ESP32-S3 board, 16 MB flash, 8 MB PSRAM | ~12 € |
 
@@ -205,8 +213,8 @@ LILYGO T-SIM7080G-S3          External Modules
 │ GPIO3  (INT) ────┼──← MPU-6050 INT (deep sleep wake-up)
 │                  │
 │                  │         ┌─── External GPS ──────┐
-│ GPIO1  (RX) ─────┼──← BLITZ M10 TX  (UART2, 115200 baud)
-│ GPIO2  (TX) ─────┼──→ BLITZ M10 RX
+│ GPIO1  (RX) ─────┼──← DAN-F10N TX  (UART2, 38400 baud — auto-detected)
+│ GPIO2  (TX) ─────┼──→ DAN-F10N RX
 │                  │
 │ 3V3 ─────────────┼──→ VCC for CAN transceiver + RTC
 │ GND ─────────────┼──→ GND for all modules
@@ -224,7 +232,7 @@ Onboard (no wiring needed):
 
 Insert a nano-SIM card into the slot on the bottom of the LILYGO board.
 
-**Note:** The MPU-6050 AD0 pin must be pulled to 3.3 V so it uses I2C address `0x69` (avoiding collision with the DS1307 at `0x68`). The BLITZ M10 is powered by the PMU DC5 rail (3.3 V).
+**Note:** The MPU-6050 AD0 pin must be pulled to 3.3 V so it uses I2C address `0x69` (avoiding collision with the DS1307 at `0x68`). The DAN-F10N is powered by the PMU DC5 rail (3.3 V).
 
 ### Build and flash from PlatformIO
 
@@ -248,8 +256,8 @@ Pre-built binaries from the [Releases page](https://github.com/IDmate-app/IDTele
 
 | GPIO | Function | Direction | Bus |
 | ---- | -------- | --------- | --- |
-| 1 | External GPS RX (← M10 TX) | IN | UART2 |
-| 2 | External GPS TX (→ M10 RX) | OUT | UART2 |
+| 1 | External GPS RX (← F10 TX) | IN | UART2 |
+| 2 | External GPS TX (→ F10 RX) | OUT | UART2 |
 | 3 | MPU-6050 INT (deep sleep wake) | IN | EXT1 |
 | 4 | Modem RX (← SIM7080G TX) | IN | UART1 |
 | 5 | Modem TX (→ SIM7080G RX) | OUT | UART1 |
@@ -265,7 +273,7 @@ Pre-built binaries from the [Releases page](https://github.com/IDmate-app/IDTele
 | 44 | Modem FLIGHT / RF kill | OUT | — |
 | 45 | Sensor SDA | BIDIR | I2C Wire0 |
 
-I2C Wire0 devices: DS1307 (`0x68`), MPU-6050 (`0x69`), QMC5883L (`0x0D` — onboard BLITZ M10)
+I2C Wire0 devices: DS1307 (`0x68`), MPU-6050 (`0x69`). The GNSS module is on UART2, not I2C.
 
 ## Build Variants
 
@@ -282,7 +290,7 @@ Build with `pio run -e s3_full` or `pio run -e s3_lite`. The active env selects 
 
 The lite variant is positioned as a hobby-grade option for users who already have a plain ESP32-S3 (N16R8) board and want BLE ELM327 + CAN + WiFi upload without buying the LILYGO board with modem and PMU. It is **not feature-complete yet** — feature flags compile cleanly, but the WiFi upload path and `#ifdef` gating are still being written.
 
-> ⚠️ **The lite variant requires an external GNSS module.** The plain ESP32-S3 board has no built-in GNSS, and the lite build does not include the SIM7080G internal GNSS path. Wire a BLITZ Mini M10 (or any u-blox / NMEA-output GNSS module) to UART2 (GPIO1 RX / GPIO2 TX, 115 200 baud). Without it, the firmware boots but no location data is captured.
+> ⚠️ **The lite variant requires an external GNSS module.** The plain ESP32-S3 board has no built-in GNSS, and the lite build does not include the SIM7080G internal GNSS path. Wire a u-blox DAN-F10N (or any NMEA-output GNSS module) to UART2 (GPIO1 RX / GPIO2 TX); the firmware auto-detects 38400 / 115200 / 9600 baud. Without it, the firmware boots but no location data is captured.
 
 ---
 
@@ -305,7 +313,7 @@ CAN bus TX is **only enabled while the configured car WiFi SSID is visible**. If
 When the gyro detects no movement (car parked):
 
 1. Final telemetry batch is sent
-2. GPS enters idle mode (M10 keeps tracking at ~5 mA, resumes instantly)
+2. GPS enters idle mode (module keeps tracking, resumes instantly)
 3. ESP32-S3 enters deep sleep (µA range)
 4. Wakes on MPU-6050 motion interrupt (GPIO3) or VBUS insertion (GPIO6)
 
