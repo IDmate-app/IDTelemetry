@@ -3,6 +3,29 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.4.0] – 2026-10-28
+
+### Added
+
+- **u-blox DAN-F10N** as external GPS, **dual-band L1+L5**. The configuration is checked on every start, so L5 stays on after the module lost power in sleep.
+- **Faster cold start**: the last known position is kept in NVS and handed to the module as a starting point.
+- **Serial diagnostics**: `pmu`, `gps standby`, `gps raw`, `gps gsv`, `gps cfg <group>`, `gps powercycle <s>`, `can selftest`, `can listen <s>` (listen-only, sends nothing).
+
+### Fixed
+
+- **CAN stayed dead after a bus-off** until the next reboot — the driver is now restarted after recovery and retried.
+- **CAN buffer overflow**: long UDS answers (e.g. the 17-byte VIN) could overrun the caller's buffer.
+- **Frozen GPS position**: when the module goes silent, the last position no longer counts as valid after 10 s.
+- **Phantom satellites**: GSV signal IDs (L5/E5a/B2a) were counted as satellites.
+- **Modem**: a modem that never answers no longer blocks boot and sleep; PDP setup is time-limited; MQTT state is read exactly instead of matching any `1`.
+- **Battery**: detection is switched on in the AXP2101, and "not connected" is told apart from "level not known yet".
+- **RTC**: impossible DS1307 values (month 25) are rejected instead of corrupting timestamps; missing date is logged instead of silently dropping rows.
+
+### Changed
+
+- GPS cold-start baud rate 38400 (DAN-F10N default) — about 1.2 s faster.
+- The 20 s settle time also applies after a warm start: a valid 3D fix can still be kilometres off.
+
 ## [1.3.0] – 2026-06-13
 
 ### Fixed
@@ -98,6 +121,7 @@ versioning per [SemVer](https://semver.org/).
 - HTML cleanup, shared CSS/JS, README rewrite, i18n fixes.
 - For earlier development see `git log`.
 
+[1.4.0]: https://github.com/IDmate-app/IDTelemetry/releases/tag/v1.4.0
 [1.3.0]: https://github.com/IDmate-app/IDTelemetry/releases/tag/v1.3.0
 [1.2.0]: https://github.com/IDmate-app/IDTelemetry/releases/tag/v1.2.0
 [1.1.0]: https://github.com/IDmate-app/IDTelemetry/releases/tag/v1.1.0

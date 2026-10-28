@@ -6,7 +6,7 @@
 //  Hardware: LILYGO T-SIM7080G-S3 (ESP32-S3-WROOM-1-N16R8) + SN65HVD230
 // ============================================================
 
-#define FW_VERSION  "1.3.0"
+#define FW_VERSION  "1.4.0"
 
 // ============================================================
 //  BUILD-VARIANT FEATURE FLAGS
