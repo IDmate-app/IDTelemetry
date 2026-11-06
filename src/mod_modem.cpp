@@ -710,6 +710,8 @@ static void modem_task(void* /*param*/) {
     uint32_t   vbus_lost_ms     = 0;
 
     int        scan_fail_count = 0;        // Fehlversuche STATE_WAIT_FOR_NETWORK
+    bool       reg_found_in_wait = false;  // ROADMAP 5: Modem hat sich im Backoff selbst registriert
+    int        sim_check_fail  = 0;        // ROADMAP 5: CPIN-Fehlschlaege vor "GPS-only"
     bool       radio_initialized = false;  // CFUN-Sequenz bereits ausgeführt
 
     bool       first_fix       = true;     // Erster GPS-Fix noch nicht gemeldet
@@ -746,13 +748,23 @@ static void modem_task(void* /*param*/) {
 
                 if (s_sim_ok) {
 
+                    sim_check_fail = 0;
                     syslog("MODEM", "SIM OK · Netzsuche");
 
                     state = STATE_WAIT_FOR_NETWORK;
 
+                } else if (++sim_check_fail < 3) {
+                    // ROADMAP 5: Im Funkloch ist das Modem nach COPS=0 mit der
+                    // Netzsuche beschaeftigt und antwortet auf CPIN? mit
+                    // "SIM busy" oder gar nicht. Das ist keine fehlende SIM.
+                    snprintf(syslog_msg, sizeof(syslog_msg),
+                             "SIM nicht READY (Versuch %d/3) · warte 5s", sim_check_fail);
+                    syslog("MODEM", syslog_msg);
+                    vTaskDelay(pdMS_TO_TICKS(5000));
+                    continue;
                 } else {
 
-                    syslog("MODEM", "Keine SIM · GPS-only Modus (ext. GPS)");
+                    syslog("MODEM", "Keine SIM · GPS-only Modus (ext. GPS), pruefe alle 60s erneut");
                     s_gps_enabled = false;
                     state = STATE_RUNNING;
                     last_stat_ms = now;
@@ -789,7 +801,16 @@ static void modem_task(void* /*param*/) {
 
                 // 3. Netz-Registrierung: erst manuell (DE), dann Auto (Ausland)
                 {
-                    bool registered = try_register(s_operator, sizeof(s_operator));
+                    bool registered;
+                    if (reg_found_in_wait) {
+                        // ROADMAP 5: Auto-Modus hat im Backoff ein erlaubtes Netz
+                        // gefunden — nicht neu suchen (Phase 0 wuerde es wieder abmelden)
+                        reg_found_in_wait = false;
+                        lookup_operator(s_operator, sizeof(s_operator));
+                        registered = true;
+                    } else {
+                        registered = try_register(s_operator, sizeof(s_operator));
+                    }
 
                     if (registered) {
                         s_sig_quality = (int8_t)s_modem.getSignalQuality();
@@ -826,9 +847,27 @@ static void modem_task(void* /*param*/) {
                                  "Kein Operator erreichbar (Versuch %d) · warte %lus",
                                  scan_fail_count, (unsigned long)(backoff_ms / 1000UL));
                         syslog("MODEM", syslog_msg);
-                        // shutdown-responsiv warten (1-s-Schritte)
-                        for (uint32_t w = 0; w < backoff_ms && !g_shutdown; w += 1000)
+                        // shutdown-responsiv warten (1-s-Schritte).
+                        // ROADMAP 5: Jeder Versuch endet im Auto-Modus (COPS=0), das
+                        // Modem sucht also selbst weiter. Alle 15 s nachsehen, ob es
+                        // ein erlaubtes Netz gefunden hat, statt bis zu 15 min blind
+                        // zu warten (Start im Funkloch → ganze Fahrt ohne Upload).
+                        for (uint32_t w = 0; w < backoff_ms && !g_shutdown; w += 1000) {
                             vTaskDelay(pdMS_TO_TICKS(1000));
+                            if ((w / 1000) % 15 != 14) continue;
+                            RegStatus r = s_modem.getRegistrationStatus();
+                            if (r != REG_OK_HOME && r != REG_OK_ROAMING) continue;
+                            char plmn[8] = "";
+                            get_current_plmn(plmn, sizeof(plmn));
+                            if (plmn[0] && !is_allowed_plmn(plmn)) continue;
+                            snprintf(syslog_msg, sizeof(syslog_msg),
+                                     "Netz im Backoff gefunden (%s) nach %lus", plmn[0] ? plmn : "?",
+                                     (unsigned long)(w / 1000 + 1));
+                            syslog("MODEM", syslog_msg);
+                            if (plmn[0]) save_last_plmn(plmn);
+                            reg_found_in_wait = true;
+                            break;
+                        }
                     }
                 }
 
@@ -990,6 +1029,22 @@ static void modem_task(void* /*param*/) {
                 }
 
                 #ifndef LTE_DISABLED
+                // ROADMAP 5: "Keine SIM" war bisher endgueltig bis zum Neustart —
+                // die ganze MQTT-Eskalation unten haengt an s_sim_ok. Alle 60 s
+                // neu pruefen; READY → regulaere Netzsuche.
+                {
+                    static uint32_t s_sim_retry_ms = 0;
+                    if (!s_sim_ok && (now - s_sim_retry_ms) >= 60000UL) {
+                        s_sim_retry_ms = now;
+                        if (s_modem.getSimStatus(3000L) == SIM_READY) {
+                            syslog("MODEM", "SIM jetzt READY · Netzsuche");
+                            sim_check_fail = 0;
+                            state = STATE_CHECK_SIM;
+                            break;
+                        }
+                    }
+                }
+
                 // ── MQTT: Publish + 4-Stufen-Eskalation bei Verbindungsverlust ──
                 //
                 //  Stufe 1: MQTT Reconnect alle 10s
@@ -1082,9 +1137,26 @@ static void modem_task(void* /*param*/) {
                                 s_modem.waitResponse(5000L);
                                 modem_pwrkey_pulse();
                                 delay(3000);
-                                for (int i = 0; i < 5; i++) {
-                                    if (s_modem.testAT(1000)) break;
-                                    delay(500);
+                                bool at_back = false;
+                                for (int i = 0; i < 5 && !at_back; i++) {
+                                    at_back = s_modem.testAT(1000);
+                                    if (!at_back) delay(500);
+                                }
+                                // ROADMAP 5: PWRKEY schaltet beim SIM7080 um (an ↔ aus).
+                                // Antwortet nichts mehr, war der Impuls ein Ausschalten
+                                // → zweiter Impuls schaltet wieder ein.
+                                if (!at_back) {
+                                    syslog("MODEM", "Kein AT nach PWRKEY · Modem war aus → einschalten");
+                                    modem_pwrkey_pulse();
+                                    for (int i = 0; i < 20 && !at_back; i++) {
+                                        delay(500);
+                                        at_back = s_modem.testAT(1000);
+                                    }
+                                    syslog("MODEM", at_back ? "Modem antwortet wieder" : "Modem antwortet weiterhin nicht");
+                                }
+                                if (at_back) {
+                                    s_modem.sendAT("E0");      // Echo nach Neustart wieder aus
+                                    s_modem.waitResponse(1000L);
                                 }
                                 s_connected = false;
                                 s_mqtt_fail_count = 0;

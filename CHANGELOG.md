@@ -17,6 +17,7 @@ versioning per [SemVer](https://semver.org/).
 
 - **Logs vanished**: `/download-sys-log` and `/download-elm-log` renamed the log, so every call (and the debug page preview every 15–20 s) emptied it. The download now copies; the preview reads only the end of the file.
 - The debug page says when the ELM log is switched off instead of hiding the section.
+- **Start without network → no upload until reboot** (ROADMAP 5): one failed SIM check while the modem was busy searching switched LTE off for good ("GPS-only"). Now 3 tries, and the SIM is re-checked every 60 s. During the network backoff (up to 15 min) the stick now looks every 15 s whether the modem has found an allowed network on its own. If the modem stays silent after the PWRKEY reset, a second pulse switches it back on.
 
 ### Changed
 
