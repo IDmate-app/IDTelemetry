@@ -811,7 +811,7 @@ void telem_init() {
         s_cache[i].valid = false;
     }
     s_influx_ok = false;
-    telem_store_init();  // Raw-Partition Ring-Buffer: 5 MB, ~40k Rows ausfallsicher
+    telem_store_init();  // Raw-Partition Ring-Buffer: 3 MB (ab 1.6.0), ~24k Rows ausfallsicher
     syslog("TELEM", "init OK");
 }
 

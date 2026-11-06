@@ -3,6 +3,22 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.0] – 2026-11-06
+
+**One-time USB flash needed** (new partition table). After that, updates go through the stick's configuration page.
+
+### Added
+
+- **Firmware update over the web page**: two firmware slots (`app0`/`app1`). The upload goes into the free slot; the running one stays as the way back. The AP password is required, the file is checked before writing (ESP32-S3 image, full/lite by file name) and verified after (image + SHA). The release asset `idtelemetry-full-<version>.bin` is the file to upload.
+- **Crash protection**: if a freshly uploaded firmware crashes three times in a row (panic/watchdog) before running 2 minutes, the stick boots the previous one again. Deep-sleep wakes and normal restarts do not count.
+- **Back to the previous firmware**: button on the configuration page (shows its build ID).
+- The web flasher writes `boot_app0` (otadata) as well, so a USB flash always starts the flashed firmware, even after a web update.
+
+### Changed
+
+- Partition table (full): `app1` 2 MB added, `telem` 5 → 3 MB (~24,500 rows), `coredump` moved. `nvs` (configuration), `app0` and `spiffs` (logs) stay where they are. The `telem` partition is erased once on the first start with the new layout — send the backlog before flashing (normally it is empty).
+- Lite: SPIFFS moves and is formatted once (logs gone).
+
 ## [1.5.2] – 2026-11-06
 
 ### Added

@@ -182,11 +182,9 @@ der Stick 2AB8 selbst, bedient ABRP aus dem Cache und kalibriert den Faktor
 (Bit 20). 0x0364 (Werte 4–16) eher eine Leistung, 0x2613 (≈ 309–327) eher eine
 Temperatur — weiter offen.
 
-**Web-OTA:** geht mit der heutigen Partitionstabelle nicht (ein App-Platz).
-Möglich wäre: `app1` (2 MB) einfügen, `telem` von 5 auf 3 MB verkleinern
-(~24.000 statt ~41.000 Zeilen), SPIFFS bleibt an seiner Stelle. Das braucht
-einmal einen USB-Flash mit Partitionstabelle und Löschen der `telem`-Partition
-(Backlog vorher leer senden). Danach Updates per Browser über die Konfig-Seite.
+**Web-OTA: umgesetzt in 1.6.0** — `app1` (2 MB), `telem` 5 → 3 MB, SPIFFS und
+NVS bleiben. Einmal per USB, danach Updates über die Konfig-Seite, mit
+Absturzschutz (3 Abstürze → vorherige Firmware) und Rückweg-Knopf.
 
 ## 3. SoC-Formel: Stick und ABRP rechnen verschieden
 

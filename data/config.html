@@ -252,7 +252,7 @@
       <input type="checkbox" id="mod_compass" style="width:16px;height:16px;accent-color:var(--accent)">
       <span style="font-size:12px" data-i18n="cfg.compass_label">Compass (QMC5883L, BLITZ M10 only)</span>
     </label>
-    <div class="hint" data-i18n="cfg.compass_hint">Compass on I2C Wire0 (GPIO45/21). Disable if not fitted.</div>
+    <div class="hint" style="display:none" data-i18n="cfg.compass_hint">Compass on I2C Wire0 (GPIO45/21). Disable if not fitted.</div>
   </div>
 
   <!-- SPIFFS Logs -->
@@ -290,11 +290,16 @@
         <span style="font-size:10px" data-i18n="cfg.ota_drop_sub">(PlatformIO: .pio/build/&lt;env&gt;/firmware.bin)</span>
       </div>
     </div>
+    <div style="margin-top:10px">
+      <input type="password" id="ota-pw" autocomplete="current-password" data-i18n-ph="cfg.ota_pw" placeholder="AP-Passwort" style="width:100%">
+    </div>
     <div class="ota-prog" id="ota-prog"><div class="ota-prog-bar" id="ota-bar"></div></div>
     <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn green" onclick="startOta()" id="btn-ota" disabled data-i18n="cfg.ota_flash">&#8593; Flash</button>
       <span id="ota-status" style="font-size:11px;color:var(--muted)" data-i18n="cfg.ota_none">Keine Datei ausgew&#228;hlt</span>
     </div>
+    <div id="ota-slot" style="margin-top:10px;font-size:11px;color:var(--muted)"></div>
+    <button class="btn" style="margin-top:8px;display:none" onclick="otaRollback()" id="btn-ota-back"></button>
     <div class="hint warn" style="margin-top:8px" data-i18n="cfg.ota_hint">
       &#9888; Das Ger&#228;t startet nach erfolgreichem Upload automatisch neu. WLAN-Verbindung wird kurz unterbrochen.
     </div>
@@ -312,8 +317,10 @@ async function fetchStatus(){
   try{
     var d=await(await fetch('/status')).json();
     if(d.fw_version){var v=document.getElementById('fw-ver');if(v){var b=d.fw_build&&d.fw_build!==d.fw_version?' · '+d.fw_build:'';v.textContent='v'+d.fw_version+(d.fw_variant?' '+d.fw_variant:'')+b;v.title='Build '+(d.fw_build||d.fw_version);if(b.indexOf('dirty')>=0)v.style.color='var(--orange)';}}
-    if(d.ota_possible===false){var od=document.getElementById('ota-drop'),ob=document.getElementById('btn-ota'),os=document.getElementById('ota-status');
-      if(od)od.style.display='none';if(ob)ob.style.display='none';if(os)os.textContent=t('cfg.ota_unavailable');}
+    if(d.ota_possible===false){var od=document.getElementById('ota-drop'),ob=document.getElementById('btn-ota'),os=document.getElementById('ota-status'),op=document.getElementById('ota-pw');
+      if(od)od.style.display='none';if(ob)ob.style.display='none';if(op)op.style.display='none';if(os)os.textContent=t('cfg.ota_unavailable');}
+    else if(d.ota_slot){var sl=document.getElementById('ota-slot');if(sl)sl.textContent=t('cfg.ota_slot',[d.ota_slot]);
+      var bb=document.getElementById('btn-ota-back');if(bb&&d.ota_other_build){bb.textContent=t('cfg.ota_back',[d.ota_other_build]);bb.style.display='';}}
     setLed('can',d.can_ok?'green':'blue');
     setLed('gps',d.gps_valid?'green':'');
     setLed('lte',d.modem_ok?'green':'');
@@ -499,6 +506,17 @@ document.getElementById('ota-file').addEventListener('change',function(){
   });
 })();
 
+async function otaRollback(){
+  var b=document.getElementById('btn-ota-back');
+  if(!confirm(b.textContent+'?'))return;
+  var f=new FormData();f.append('pw',document.getElementById('ota-pw').value);
+  try{
+    var d=await(await fetch('/api/ota-rollback',{method:'POST',body:f})).json();
+    if(d.ok)toast(t('cfg.ota_reboot_reload'));
+    else toast(t('cfg.ota_err_'+d.err)||t('cfg.ota_fail'),false);
+  }catch(_){toast(t('cfg.ota_reboot_reload'));}
+}
+
 async function startOta(){
   if(!_otaFile){toast(t('cfg.ota_no_file'),false);return;}
   var btn=document.getElementById('btn-ota');
@@ -512,6 +530,7 @@ async function startOta(){
   st.textContent=t('cfg.ota_uploading');
 
   var form=new FormData();
+  form.append('pw',document.getElementById('ota-pw').value);   // VOR der Datei: der Stick prueft es beim ersten Block
   form.append('firmware',_otaFile,_otaFile.name);
 
   var xhr=new XMLHttpRequest();
@@ -536,8 +555,10 @@ async function startOta(){
         toast(t('cfg.ota_flashed'));
       }else{
         st.style.color='var(--red)';
-        st.textContent='\u2717 '+t('cfg.ota_fail');
-        toast(t('cfg.ota_fail'),false);
+        var why=d.err?t('cfg.ota_err_'+d.err):'';
+        if(!why||why==='cfg.ota_err_'+d.err)why=t('cfg.ota_fail')+(d.err?' ('+d.err+')':'');
+        st.textContent='\u2717 '+why;
+        toast(why,false);
         btn.disabled=false;
       }
     }catch(_){
