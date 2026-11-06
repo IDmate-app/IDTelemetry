@@ -74,3 +74,6 @@ int can_isotp_query_elm(uint32_t tx_id, uint32_t rx_id,
 
 // CAN Sniffer: alle Frames für duration_ms auf Serial dumpen
 void can_sniff(uint32_t duration_ms);
+
+// 1.6.2: ohne VBUS Hoermodus (LISTEN_ONLY) + Statistik; jede Sekunde aufrufen
+void can_passive_tick();

@@ -690,6 +690,9 @@ static void telem_task(void* /*param*/) {
     while (!g_shutdown) {
         now = millis();
 
+        // ── 1.6.2: ohne VBUS Hoermodus + Statistik ──────────
+        can_passive_tick();
+
         // ── CAN: max. 1 Abfrage pro Tick (1 s) ──────────────
         // Die am meisten überfällige DID wird zuerst bedient.
         if (can_hw_ok() && !scan_running && !monitor_mode) {

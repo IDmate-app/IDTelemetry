@@ -3,6 +3,17 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.2] – 2026-11-06
+
+### Added
+
+- **Setting "OBD power is switched"** (configuration page, CAN bus & vehicle alarm). On: power at the stick means the car is awake, so it reads without the movement condition (e.g. while charging). Off (default): permanent power at the OBD port — reading only with power and movement, as before.
+- **Listen-only without power**: when VBUS is gone the CAN controller switches to `LISTEN_ONLY` (no requests, no ACK bits). If the bus still carries traffic, a statistic goes to the syslog every minute (`CAN passiv: … Rahmen/min, … Kennungen`) — ROADMAP 6, test 2, without a laptop. Back to normal as soon as power returns.
+
+### Changed
+
+- **Falling asleep after power loss**: stays awake while something moves (getting out, plugging in the charger, getting back in). Sleeps once power has been gone ≥ 3 min and nothing moved for 2 min; at the latest after 15 min (carrying the stick must not drain its battery). Before: fixed 5 min.
+
 ## [1.6.1] – 2026-11-06
 
 ### Fixed

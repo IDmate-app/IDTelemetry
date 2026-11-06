@@ -72,6 +72,9 @@ bool        cfg_mod_compass();  // FIXES B.17: QMC5883L-Kompass (Setting persist
 
 // Log-Schalter (SPIFFS-Logging ein/aus, zur Laufzeit änderbar)
 bool        cfg_log_can();    // CAN/ELM SPIFFS-Log
+// OBD-Spannung ist geschaltet (geht beim Aussteigen weg): dann ist VBUS der
+// Beweis, dass das Auto wach ist → Senden ohne Bewegungs-Bedingung (1.6.2)
+bool        cfg_can_vbus();
 bool        cfg_log_ble();    // BLE SPIFFS-Log
 bool        cfg_log_wifi();   // WiFi Scan-Log (Legacy)
 
