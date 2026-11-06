@@ -17,6 +17,24 @@ lässt sich 2 nicht entschlüsseln.
 
 ## 0. Firmware-Stand abgleichen
 
+**Ergebnis (Flash-Abbild vom 2026-11-06, ausgewertet mit `tools/stick_dump.py`):**
+
+- `FW_VERSION` im Image: **„1.2.0“** — trotzdem kein 1.2.0-Release-Stand.
+- Basis ist der Zweig `gps/ubx-ack-baud-autodetect` (26.08., 1.2.0 + UBX-ACK,
+  Baud-Erkennung) **plus** damals nicht committete Arbeit, die erst am 26.10.
+  in `eab0a5d` (L1+L5) gelandet ist: `can listen`/`can selftest`,
+  BUS_OFF-Recovery, GPS-Standby/-Powercycle/-Cache, Akku-Erkennung.
+- Es fehlen **alle Phase-B-Fixes** (`FIXES.md` B.1–B.17), u. a.
+  Slot-Layout-Kennung (B.5), MQTT-WiFi mit QoS1/PUBACK (B.4), begrenzter
+  PLMN-Scan (B.12), RTC-Glitch-Filter, Konfig-Validierung.
+- Ringpuffer: 22 Felder, Byte-Flags, Layout-Marker `0xFF` (unversioniert) —
+  wird von `next-1.5` gelesen. Beim Auslesen 0 ungesendete Zeilen.
+- Logs vollständig vorhanden (`sys.log` ~730 KB, `elm.log` ~250 KB,
+  `sys.log.snap`), dazu viele Zeilen aus gelöschten Seiten.
+- Bewertung: `next-1.5` (= 1.4.0 + Neues) ist ein großer Sprung gegenüber dem
+  Stick, enthält aber alles, was im Image steckt. Rückweg: `app0.bin` aus dem
+  Abbild.
+
 **Problem:** Auf dem Stick läuft ein Stand, der nicht sicher einem Commit auf
 GitHub entspricht (eine frühere Sitzung hat lokale Änderungen nicht gepusht).
 Die Weboberfläche zeigt **keine** Firmware-Version an. Der Stick bleibt, bis
@@ -179,8 +197,36 @@ zeichnet weiter alle Zeilen auf und bedient ABRP, sendet aber nichts mehr bis
 zum nächsten Neustart. Dann lädt er hunderte bis tausende Zeilen am Stück nach;
 in IDmate fehlt solange der Verlauf der Fahrt.
 
-**Analyse (Code, 2026-11-06) — drei Kandidaten, Fix auf `next-1.5` als
-eigener Commit:**
+**Log-Befund (gerettetes `sys.log`, Sept.–Nov. 2026) — die eigentliche Ursache:**
+
+Nicht der Start im Funkloch, sondern **jeder Abriss während der Fahrt**:
+`Publish fehlgeschlagen` → Reconnect → immer wieder „GPRS OK aber
+MQTT-Connect fehlgeschlagen“ → PWRKEY-„Reset“ → danach durchgehend `reg=-1`
+(Modem antwortet nicht = ausgeschaltet) → PLMN-Scans → nach **20–35 min**
+Eskalations-Neustart. Direkt nach dem Neustart steht alles in ~20 s
+(Registrierung, PDP, MQTT) — **ohne** Modem-Reset. Das wiederholt sich in
+den Logs rund zehnmal; die Zeilen gehen nicht verloren, kommen aber erst nach
+dem Neustart (oder nach dem nächsten Deep-Sleep-Wake).
+
+Ursachen im Code (identisch in Stick-Stand und 1.4.0):
+
+- `mqtt_connect()` konfigurierte MQTT nur **einmal** (`SMDISC`/`SMCONF` hinter
+  `s_configured`). Nach einem Abriss wurde nie neu konfiguriert; der Neustart
+  tut genau das.
+- `modem_ensure_connected()` kehrt sofort zurück, wenn der PDP-Kontext
+  „aktiv“ meldet — ein toter Kontext wird nie erneuert.
+- Der PWRKEY-Impuls schaltet das laufende Modem **aus**.
+
+Fix auf `next-1.5`: SMDISC + SMCONF bei jedem Connect; nach „GPRS OK aber
+MQTT fehlgeschlagen“ PDP trennen; erste Eskalation = Funk neu aufbauen wie
+nach dem Boot (Registrierung → PDP → MQTT) ohne PWRKEY und ohne ESP-Neustart;
+PWRKEY erst danach, mit Wiedereinschalten.
+
+„Keine SIM“ und „Kein Operator erreichbar“ kommen in den Logs **nicht** vor —
+Kandidaten 1 und 2 unten sind bei diesem Stick nicht beobachtet (die Fixes
+schaden nicht und bleiben).
+
+**Ursprüngliche Analyse (Code, vor dem Log-Befund) — drei Kandidaten:**
 
 1. **„Keine SIM“ ist endgültig (stärkster Verdacht für „bis zum Neustart“).**
    Jeder Netzsuch-Versuch endet im Auto-Modus (`COPS=0`), das Modem sucht dann

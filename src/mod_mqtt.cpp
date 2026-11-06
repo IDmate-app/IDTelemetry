@@ -134,7 +134,11 @@ static bool mqtt_smconn(uint32_t hard_timeout_ms = 20000UL) {
 static void mqtt_publish_info();
 
 bool mqtt_connect() {
-    if (!s_configured) mqtt_configure();
+    // ROADMAP 5 (Log-Befund 2026-09/10): Nur einmal konfigurieren reichte
+    // nicht. Nach einem Abriss scheiterte SMCONN dutzendfach ("GPRS OK aber
+    // MQTT-Connect fehlgeschlagen"), nach einem Neustart klappte es sofort —
+    // der Neustart macht SMDISC + SMCONF frisch. Das jetzt bei JEDEM Connect.
+    mqtt_configure();
 
     syslog("MQTT", "Verbinde...");
     bool ok = mqtt_smconn(20000UL);
