@@ -172,13 +172,23 @@ static void boot_scan() {
         return;
     }
 
+    // 1.6.5: neuesten beschriebenen Slot merken (hoechster Zeitstempel).
+    // Ohne ungesendete Zeilen setzte der Boot-Scan head auf 0 — jede Fahrt
+    // begann vorne und loeschte die gesendeten Zeilen der letzten Fahrten,
+    // die "Erneut senden" noch braucht (Log 2026-11-06: "Boot-Scan: leer").
+    uint32_t newest_idx = UINT32_MAX, newest_ts = 0;
     for (uint32_t sec = 0; sec < num_sectors; sec++) {
         if (esp_partition_read(s_part, sec * SECTOR_SIZE, sec_buf, SECTOR_SIZE) != ESP_OK) {
             for (uint32_t s = 0; s < SLOTS_PER_SECTOR; s++) status[sec * SLOTS_PER_SECTOR + s] = 0xFF;
             continue;
         }
         for (uint32_t s = 0; s < SLOTS_PER_SECTOR; s++) {
-            status[sec * SLOTS_PER_SECTOR + s] = sec_buf[s * SLOT_SIZE];
+            const uint8_t* sl = sec_buf + s * SLOT_SIZE;
+            status[sec * SLOTS_PER_SECTOR + s] = sl[0];
+            if (sl[0] == STATUS_WRITTEN || sl[0] == STATUS_SENT) {
+                uint32_t ts; memcpy(&ts, sl + 4, 4);
+                if (ts >= 1704067200u && ts != 0xFFFFFFFFu && ts >= newest_ts) { newest_ts = ts; newest_idx = sec * SLOTS_PER_SECTOR + s; }
+            }
         }
     }
     free(sec_buf);
@@ -191,10 +201,13 @@ static void boot_scan() {
     }
 
     if (count_written == 0) {
-        s_head = s_tail = 0;
+        // Hinter der neuesten Zeile weiterschreiben, nicht bei 0 (1.6.5).
+        s_head = (newest_idx == UINT32_MAX) ? 0 : (newest_idx + 1) % s_total_slots;
+        s_tail = s_head;
         s_pending = 0;
         free(status);
-        char m[64]; snprintf(m, sizeof(m), "Boot-Scan: leer (0/%u Slots)", s_total_slots);
+        char m[96]; snprintf(m, sizeof(m), "Boot-Scan: nichts ungesendet · weiter bei Slot %u (von %u)",
+                             (unsigned)s_head, (unsigned)s_total_slots);
         syslog("STORE", m);
         return;
     }

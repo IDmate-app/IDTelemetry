@@ -120,6 +120,8 @@ void sleep_log_wake() {
     syslog("WAKE", msg);
 }
 
+static uint32_t s_crit_since = 0;   // 1.6.5: seit wann "Akku kritisch" (0 = nicht)
+
 // ── Update: im loop() aufrufen ────────────────────────────
 void sleep_update() {
     if (g_nosleep || g_shutdown) return;
@@ -131,6 +133,7 @@ void sleep_update() {
     bool vbus = pmu_is_vbus_in();
     if (vbus) {
         g_last_vbus_seen_ms = now;
+        s_crit_since = 0;
         // Sleep-Anforderung zurücknehmen falls VBUS zurückgekehrt ist
         if (g_sleep_requested) {
             g_sleep_requested = false;
@@ -145,8 +148,14 @@ void sleep_update() {
     // schlafen (nicht erst nach 5/10 min). Zusammen mit dem VBUS-only-Wake in
     // enter_deep_sleep() bricht das die Gyro-Wake-Schleife beim Transport, die
     // den Akku sonst bis zur AXP2101-Hardware-Abschaltung leerzykelt.
+    // 1.6.5: nur wenn es 30 s anhaelt. Log 2026-11-06: 25 s nach einem
+    // Web-Update, bei flackerndem VBUS, schlief der Stick mit "Akku kritisch"
+    // ein, obwohl der Akku eine Stunde vorher 100 % hatte (Fehlmessung).
     int batt_pct = pmu_batt_pct();
-    bool batt_critical = (batt_pct >= 0 && batt_pct < SLEEP_LOW_BATT_PCT);
+    bool batt_low = (batt_pct >= 0 && batt_pct < SLEEP_LOW_BATT_PCT);
+    if (!batt_low) s_crit_since = 0;
+    else if (s_crit_since == 0) s_crit_since = now ? now : 1;
+    bool batt_critical = batt_low && (now - s_crit_since) >= 30000UL;
     if (batt_critical) {
         enter_deep_sleep("Deep Sleep: Akku kritisch, kein VBUS — nur VBUS-Wake");
         return;  // (erreicht enter_deep_sleep nicht zurück)
