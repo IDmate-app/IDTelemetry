@@ -171,6 +171,23 @@ Datenvolumen: wenige Bytes pro Telegramm mehr, Werte nur bei Änderung
 
 ---
 
+**Stand 2026-11-06 (ELM-Log aus 1.5.1 + ABRP-Befehlsliste):** In ABRPs
+Befehlsliste haben `220364` und `222613` **keine Gleichung** — ABRP fragt sie,
+rechnet aber nichts daraus; sein SoE ist vermutlich SoC × Kapazität (`222AB2`,
+`INT16(A:B)*50/1000`, identisch mit dem Stick). Dafür fragt ABRP alle 5 s
+**`0x2AB8` an ECU 710** (nicht in der Liste, vermutlich eingebautes Profil):
+`A:B:C:D` fällt beim Fahren gleichmäßig (3355 → 3141 in 13 min). Ab 1.5.2 pollt
+der Stick 2AB8 selbst, bedient ABRP aus dem Cache und kalibriert den Faktor
+über Spannung × Strom (`CAL2AB8` im Syslog). Steht der Faktor, wird 2AB8 → SoE
+(Bit 20). 0x0364 (Werte 4–16) eher eine Leistung, 0x2613 (≈ 309–327) eher eine
+Temperatur — weiter offen.
+
+**Web-OTA:** geht mit der heutigen Partitionstabelle nicht (ein App-Platz).
+Möglich wäre: `app1` (2 MB) einfügen, `telem` von 5 auf 3 MB verkleinern
+(~24.000 statt ~41.000 Zeilen), SPIFFS bleibt an seiner Stelle. Das braucht
+einmal einen USB-Flash mit Partitionstabelle und Löschen der `telem`-Partition
+(Backlog vorher leer senden). Danach Updates per Browser über die Konfig-Seite.
+
 ## 3. SoC-Formel: Stick und ABRP rechnen verschieden
 
 - Stick (`0x028C`): `A · 0,4425 − 6,1947`

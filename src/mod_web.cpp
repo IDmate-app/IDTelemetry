@@ -14,6 +14,7 @@
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 #include <Update.h>
+#include <esp_ota_ops.h>
 
 // ── Eingebettete Web-Assets ─────────────────────────────────
 // Linker-Symbole von board_build.embed_txtfiles in platformio.ini.
@@ -223,7 +224,11 @@ void web_init() {
         {   // Rohbytes der noch nicht entschluesselten DIDs (ROADMAP 2)
             char raw[192]; telem_raw_did_str(raw, sizeof(raw));
             doc["raw_dids"] = raw;
+            char cal[96]; telem_cal_str(cal, sizeof(cal));
+            doc["cal_2ab8"] = cal;
         }
+        // Web-OTA geht nur mit zweitem App-Platz (partitions.csv hat einen)
+        doc["ota_possible"] = esp_ota_get_next_update_partition(NULL) != nullptr;
         doc["uptime"]      = millis();
         doc["can_ok"]      = can_hw_ok();
         doc["log_cnt"]     = log_count;

@@ -312,6 +312,8 @@ async function fetchStatus(){
   try{
     var d=await(await fetch('/status')).json();
     if(d.fw_version){var v=document.getElementById('fw-ver');if(v){var b=d.fw_build&&d.fw_build!==d.fw_version?' · '+d.fw_build:'';v.textContent='v'+d.fw_version+(d.fw_variant?' '+d.fw_variant:'')+b;v.title='Build '+(d.fw_build||d.fw_version);if(b.indexOf('dirty')>=0)v.style.color='var(--orange)';}}
+    if(d.ota_possible===false){var od=document.getElementById('ota-drop'),ob=document.getElementById('btn-ota'),os=document.getElementById('ota-status');
+      if(od)od.style.display='none';if(ob)ob.style.display='none';if(os)os.textContent=t('cfg.ota_unavailable');}
     setLed('can',d.can_ok?'green':'blue');
     setLed('gps',d.gps_valid?'green':'');
     setLed('lte',d.modem_ok?'green':'');
