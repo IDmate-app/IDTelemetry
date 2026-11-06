@@ -78,3 +78,10 @@ int  payload_encode(const TelemetryRow& row, uint8_t* out, int out_size);
 // Initialise the AES key from cfg_aes_key() with secrets.h fallback.
 // Idempotent — payload_encode() calls this automatically the first time.
 void payload_init_key();
+
+// 1.6.3: nach dem Speichern eines neuen Schluessels aufrufen — gilt sofort.
+void payload_key_changed();
+
+// true = der Stick hat nur den Beispielschluessel (alles 0). Dann wird nichts
+// gesendet (payload_encode*() liefert 0), die Zeilen bleiben im Puffer.
+bool payload_key_is_example();

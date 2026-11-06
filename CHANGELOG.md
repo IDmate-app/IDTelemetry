@@ -3,6 +3,18 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.3] – 2026-11-06
+
+### Added
+
+- **Send again from a point in time** (configuration page, "Daten erneut senden"): rows already sent in a chosen period go out once more with their original timestamps — e.g. after the server could not read them because of a wrong key. Sent slots cannot be flipped back without an erase, so they are appended again as new rows; the server just overwrites what it already has. At most a quarter of the buffer per request. Runs in the telemetry task; the result shows on the page and in the syslog.
+
+### Fixed
+
+- **Release firmware without a key sent unreadable telegrams**: release builds only carry the public example key (all zeros). With an empty AES field the stick encrypted with it, the broker confirmed every row, and the server dropped them all — silently. Now the stick sends nothing with the example key, keeps the rows in the buffer, writes a warning to the syslog every 5 minutes and shows a red notice on the configuration page.
+- **An empty or invalid AES field no longer deletes a stored key.**
+- **A new AES key applies right after saving**, without a restart (before: only after the next boot).
+
 ## [1.6.2] – 2026-11-06
 
 ### Added

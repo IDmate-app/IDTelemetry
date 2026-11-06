@@ -48,6 +48,9 @@
 
 <div class="container">
 
+  <!-- 1.6.3: kein eigener AES-Schluessel -->
+  <div class="card" id="aes-alarm" style="display:none;border-color:var(--red);color:var(--red);font-size:12px;line-height:1.5;margin-top:12px" data-i18n="cfg.aes_alarm">&#9888; Kein AES-Schl&#252;ssel eingetragen. Der Stick sendet NICHTS, bis unter MQTT Broker der Schl&#252;ssel von IDmate eingetragen und gespeichert ist. Die Daten bleiben bis dahin im Puffer.</div>
+
   <!-- Sprache -->
   <div class="section-title" data-i18n="cfg.lang_title">Sprache / Language</div>
   <div class="card">
@@ -144,11 +147,11 @@
     <div class="field" style="margin-top:10px">
       <div class="lbl" data-i18n="cfg.aes_label">AES-256 Key (64 hex chars)</div>
       <div style="display:flex;gap:6px">
-        <input type="password" id="aes_key" placeholder="(leer = secrets.h Default)" autocomplete="new-password" style="flex:1">
+        <input type="password" id="aes_key" data-i18n-ph="cfg.aes_ph" placeholder="(leer = unver&#228;ndert)" autocomplete="new-password" style="flex:1">
         <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="togglePw('aes_key', this)" title="show / hide">&#128065;</button>
       </div>
     </div>
-    <div class="hint" data-i18n="cfg.aes_hint">Optional: &#252;berschreibt den im Firmware-Binary eingebauten Schl&#252;ssel. Leer lassen f&#252;r Default aus <code>secrets.h</code>.</div>
+    <div class="hint" data-i18n="cfg.aes_hint">Derselbe Schl&#252;ssel wie in IDmate (MQTT_AES_KEY). Gilt sofort nach dem Speichern. Ein leeres Feld l&#246;scht keinen gespeicherten Schl&#252;ssel.</div>
   </div>
 
   <!-- WiFi Upload (STA, two priority slots) -->
@@ -289,6 +292,26 @@
     Werte werden sofort im NVS gespeichert. F&#252;r APN und AP-SSID/Passwort ist ein Neustart n&#246;tig.
   </div>
 
+  <!-- 1.6.3: Erneut senden -->
+  <div class="section-title" data-i18n="cfg.resend_title">Daten erneut senden</div>
+  <div class="card">
+    <div class="row2">
+      <div class="field">
+        <div class="lbl" data-i18n="cfg.resend_from">Ab</div>
+        <input type="datetime-local" id="rs-from">
+      </div>
+      <div class="field">
+        <div class="lbl" data-i18n="cfg.resend_to">Bis</div>
+        <input type="datetime-local" id="rs-to">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+      <button class="btn" onclick="startResend()" id="btn-resend" data-i18n="cfg.resend_btn">&#8635; Erneut senden</button>
+      <span id="rs-status" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div class="hint" data-i18n="cfg.resend_hint">Schickt bereits gesendete Zeilen aus dem Zeitraum noch einmal, z. B. wenn IDmate sie wegen eines falschen Schl&#252;ssels nicht lesen konnte. Zeiten in Ortszeit. Was IDmate schon hat, wird nur &#252;berschrieben.</div>
+  </div>
+
   <!-- Firmware OTA -->
   <div class="section-title" data-i18n="cfg.ota_title">Firmware Update (OTA)</div>
   <div class="card">
@@ -331,6 +354,8 @@ async function fetchStatus(){
       if(od)od.style.display='none';if(ob)ob.style.display='none';if(op)op.style.display='none';if(os)os.textContent=t('cfg.ota_unavailable');}
     else if(d.ota_slot){var sl=document.getElementById('ota-slot');if(sl)sl.textContent=t('cfg.ota_slot',[d.ota_slot]);
       var bb=document.getElementById('btn-ota-back');if(bb&&d.ota_other_build){bb.textContent=t('cfg.ota_back',[d.ota_other_build]);bb.style.display='';}}
+    var aa=document.getElementById('aes-alarm');if(aa)aa.style.display=d.aes_example?'':'none';
+    var rs=document.getElementById('rs-status');if(rs&&d.resend_status)rs.textContent=d.resend_status==='laeuft'?t('cfg.resend_running'):d.resend_status+(d.rows_pending!=null?' · '+t('cfg.resend_pending',[d.rows_pending]):'');
     setLed('can',d.can_ok?'green':'blue');
     setLed('gps',d.gps_valid?'green':'');
     setLed('lte',d.modem_ok?'green':'');
@@ -517,6 +542,26 @@ document.getElementById('ota-file').addEventListener('change',function(){
     }
   });
 })();
+
+// ── 1.6.3: Erneut senden ────────────────────────────────
+(function(){
+  function loc(d){var z=function(n){return String(n).padStart(2,'0');};
+    return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'T'+z(d.getHours())+':'+z(d.getMinutes());}
+  var n=new Date(),f=new Date(n);f.setHours(0,0,0,0);
+  var a=document.getElementById('rs-from'),b=document.getElementById('rs-to');
+  if(a&&!a.value)a.value=loc(f);if(b&&!b.value)b.value=loc(n);
+})();
+async function startResend(){
+  var a=document.getElementById('rs-from').value,b=document.getElementById('rs-to').value;
+  var from=Math.floor(new Date(a).getTime()/1000),to=b?Math.floor(new Date(b).getTime()/1000):Math.floor(Date.now()/1000);
+  if(!a||isNaN(from)||isNaN(to)||to<=from){toast(t('cfg.resend_bad'),false);return;}
+  var st=document.getElementById('rs-status');
+  try{
+    var d=await(await fetch('/api/resend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:from,to:to})})).json();
+    if(d.ok){st.textContent=t('cfg.resend_running');toast(t('cfg.resend_ok'));setTimeout(fetchStatus,3000);}
+    else toast(t('cfg.resend_fail'),false);
+  }catch(_){toast(t('cfg.resend_fail'),false);}
+}
 
 async function otaRollback(){
   var b=document.getElementById('btn-ota-back');

@@ -35,3 +35,11 @@ uint32_t telem_store_pending();
 
 // Max-Kapazitaet (Diagnose).
 uint32_t telem_store_capacity();
+
+// 1.6.3: Bereits gesendete Zeilen mit Zeitstempel in [from, to] (Unix-Sekunden,
+// UTC) erneut einreihen — z. B. nach Telegrammen mit falschem Schluessel.
+// Nur die Anfrage; ausgefuehrt in telem_store_tick(). false = laeuft schon
+// oder Zeitraum leer.
+bool telem_store_request_resend(uint32_t from_unix, uint32_t to_unix);
+void telem_store_tick();                    // aus dem Telemetrie-Task
+const char* telem_store_resend_status();    // "" | "laeuft" | Ergebnis

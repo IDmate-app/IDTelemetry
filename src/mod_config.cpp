@@ -1,4 +1,6 @@
 #include "mod_config.h"
+#include "mod_logs.h"
+#include "mod_payload.h"
 #include "config.h"
 #include <Preferences.h>
 #include <ArduinoJson.h>
@@ -213,16 +215,22 @@ bool cfg_save_json(const uint8_t* body, size_t len) {
     // Ungültig (≠64 Hex oder all-zero) → NICHT speichern, auf leer/Built-in
     // zurückfallen + warnen. Sonst verschlüsselt der Stick still mit Müll-Key
     // und der Server kann NIE entschlüsseln (stiller Totalverlust).
+    // 1.6.3: Ein leeres oder ungueltiges Feld loescht einen gespeicherten
+    // Schluessel NICHT mehr. Ein Release-Build hat als Ersatz nur den
+    // Beispielschluessel (alles 0) — Loeschen hiess still nicht mehr senden.
     if (!doc["aes_key"].isNull()) {
         const char* s = doc["aes_key"].as<const char*>();
         if (s && s[0] == '\0') {
-            s_aes_key[0] = '\0'; p.putString("aes_key", "");
+            // leer: unveraendert lassen
         } else if (valid_aes_key(s)) {
-            strncpy(s_aes_key, s, sizeof(s_aes_key) - 1); s_aes_key[sizeof(s_aes_key) - 1] = '\0';
-            p.putString("aes_key", s_aes_key);
+            if (strcmp(s, s_aes_key) != 0) {
+                strncpy(s_aes_key, s, sizeof(s_aes_key) - 1); s_aes_key[sizeof(s_aes_key) - 1] = '\0';
+                p.putString("aes_key", s_aes_key);
+                payload_key_changed();
+                syslog("CFG", "AES-Key gespeichert - gilt ab dem naechsten Telegramm");
+            }
         } else {
-            s_aes_key[0] = '\0'; p.putString("aes_key", "");
-            Serial.println("[CFG] WARN aes_key ungültig (≠64 Hex oder all-zero) → Fallback auf SECRET_AES_KEY");
+            syslog("CFG", "AES-Key ungueltig (64 Hex-Zeichen, nicht alles 0) - nicht gespeichert, alter Schluessel bleibt");
         }
     }
     save("sta_ssid",   s_sta_ssid,   sizeof(s_sta_ssid),   doc["sta_ssid"]);
