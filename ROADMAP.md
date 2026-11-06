@@ -325,6 +325,13 @@ der Controller jeden Rahmen mit ACK — das ist bereits Senden.)
   puffern und senden → Ladekurve in IDmate.
 - Abbruch: kein Verkehr mehr für N Minuten → Deep Sleep wie bisher.
 
+**Stand 1.6.2:** Ohne Spannung schaltet der Stick automatisch in
+`LISTEN_ONLY` und schreibt minütlich `CAN passiv: … Rahmen/min` ins Syslog —
+Versuch 2 läuft damit bei jedem Aussteigen mit. Mit geschalteter OBD-Spannung
+(Einstellung) liest er beim DC-Laden normal, solange das Auto Spannung gibt.
+Wallbox-Ladungen bei abgeschlossenem Auto werden nicht erfasst (bewusst:
+kein Wachhalten, keine Tricks).
+
 **Grundsatz:** Kein Schritt, der sendet, solange das Auto aus ist. Jeder
 Versuch zuerst mit Laptop und Terminal, erst danach in die Firmware.
 

@@ -5,12 +5,16 @@
 #include "mod_pmu.h"
 #include "mod_gyro.h"
 #include "config.h"
+#include "mod_config.h"
 #include "mod_telemetry.h"
 
 // CAN TX nur bei VBUS (Auto an) + Gyro-Bewegung innerhalb GYRO_HOLD_MS
 // Senden nur, wenn das Auto sicher wach ist (VW-Alarm: ein schlafendes Auto
 // darf nicht per Diagnose geweckt werden).
 //   1. VBUS + Erschuetterung in den letzten GYRO_HOLD_MS — jemand ist im Auto.
+//   0. 1.6.2: Einstellung "OBD-Spannung geschaltet" → VBUS allein reicht
+//      (Spannung geht beim Aussteigen weg = sicherer Beweis fuer "wach").
+//      Ohne VBUS sendet der Stick NIE (Hoermodus, can_passive_tick()).
 //   2. 1.6.1: Laden — das Auto meldet "laedt" (0x7448, hoechstens 90 s alt)
 //      UND der Bus hat in den letzten 30 s geantwortet. Beim Laden ist das
 //      Auto wach, steht aber still; vorher schwieg der Stick nach 30 s.
@@ -26,8 +30,12 @@ static bool charge_hold() {
     return rx != 0 && (millis() - rx) < 30000UL;
 }
 
+static volatile bool s_listen_only = false;   // 1.6.2: ohne VBUS nur hoeren
+
 static bool can_tx_allowed() {
-    if (!pmu_is_vbus_in()) return false;
+    if (!pmu_is_vbus_in() || s_listen_only) return false;
+    // 1.6.2: OBD-Spannung geschaltet (Einstellung) → Spannung = Auto wach
+    if (cfg_can_vbus()) return true;
     uint32_t last = gyro_last_shake_ms();
     bool moving = last != 0 && (millis() - last) < GYRO_HOLD_MS;
     if (moving) return true;
@@ -928,4 +936,54 @@ void can_sniff(uint32_t duration_ms) {
         }
     }
     Serial.printf("└─── %d Frames empfangen ──────────────────┘\n", count);
+}
+
+// ============================================================
+//  1.6.2: Ohne VBUS nur hoeren (TWAI_MODE_LISTEN_ONLY)
+//  Ist die Spannung weg, wird der Controller elektrisch stumm geschaltet —
+//  keine Anfragen, auch keine ACK-Bits. Kommt trotzdem Verkehr (Bus wach,
+//  z. B. Laden), minuetlich eine Statistik ins Syslog (ROADMAP 6, Versuch 2).
+//  Kommt VBUS zurueck: wieder Normalbetrieb.
+// ============================================================
+void can_passive_tick() {
+    if (!can_running || scan_running || monitor_mode) return;
+    bool want = pmu_ok() && !pmu_is_vbus_in();
+    static uint32_t s_n = 0, s_win_ms = 0;
+    static uint32_t s_ids[24]; static int s_nid = 0;
+    if (want != s_listen_only) {
+        if (!can_lock(2000)) return;
+        twai_stop();
+        twai_driver_uninstall();
+        bool ok = can_reinstall(want ? TWAI_MODE_LISTEN_ONLY : TWAI_MODE_NORMAL, CAN_SPEED_KBPS);
+        if (!ok && want) {   // Hoermodus geht nicht → Normalbetrieb, Senden bleibt ohne VBUS ohnehin gesperrt
+            ok = can_reinstall(TWAI_MODE_NORMAL, CAN_SPEED_KBPS);
+            want = false;
+        }
+        can_running = ok;
+        s_listen_only = want && ok;
+        can_unlock();
+        syslog("CAN", s_listen_only ? "Keine Spannung — nur noch hoeren (sendet nichts, keine ACKs)"
+                                    : (ok ? "Spannung da — Normalbetrieb" : "FEHLER: Treiber-Neustart"));
+        s_n = 0; s_nid = 0; s_win_ms = millis();
+        return;
+    }
+    if (!s_listen_only) return;
+    // Empfangene Rahmen abholen und zaehlen (niemand sonst liest im Hoermodus)
+    twai_message_t rx;
+    int k = 0;
+    while (k++ < 200 && twai_receive(&rx, 0) == ESP_OK) {
+        s_n++;
+        bool known = false;
+        for (int i = 0; i < s_nid; i++) if (s_ids[i] == rx.identifier) { known = true; break; }
+        if (!known && s_nid < 24) s_ids[s_nid++] = rx.identifier;
+    }
+    if (millis() - s_win_ms < 60000UL) return;
+    char m[160];
+    int p = snprintf(m, sizeof(m), "passiv: %lu Rahmen/min, %d Kennungen", (unsigned long)s_n, s_nid);
+    for (int i = 0; i < s_nid && p < (int)sizeof(m) - 10; i++)
+        p += snprintf(m + p, sizeof(m) - p, "%s%lX", i ? " " : ": ", (unsigned long)s_ids[i]);
+    static bool s_quiet_logged = false;
+    if (s_n > 0 || !s_quiet_logged) { syslog("CAN", m); s_quiet_logged = (s_n == 0); }
+    if (s_n > 0) s_quiet_logged = false;
+    s_n = 0; s_nid = 0; s_win_ms = millis();
 }

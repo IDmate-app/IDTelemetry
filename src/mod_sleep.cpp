@@ -20,7 +20,9 @@
 //  mod_sleep - Deep Sleep Management
 // ============================================================
 
-#define SLEEP_NO_VBUS_MS   (5UL * 60UL * 1000UL)  // 5 min ohne VBUS → Sleep
+#define SLEEP_NO_VBUS_MS       (3UL * 60UL * 1000UL)   // >= 3 min ohne VBUS ...
+#define SLEEP_NO_VBUS_QUIET_MS (2UL * 60UL * 1000UL)   // ... und 2 min keine Bewegung → Sleep
+#define SLEEP_NO_VBUS_MAX_MS   (15UL * 60UL * 1000UL)  // spaetestens nach 15 min ohne VBUS
 
 // Globales Shutdown-Flag: wird von enter_deep_sleep() gesetzt.
 // Alle FreeRTOS-Tasks prüfen dies in ihrer Loop und beenden sich sauber,
@@ -150,13 +152,20 @@ void sleep_update() {
         return;  // (erreicht enter_deep_sleep nicht zurück)
     }
 
-    // VBUS weg → 5 min Schonfrist (Kurzunterbrechung, Tankpause)
+    // VBUS weg → Schonfrist (Aussteigen/Laden/Wiedereinsteigen), siehe unten
     uint32_t vbus_gone_ms = now - g_last_vbus_seen_ms;
     // FIXES B.10: Bei defekter PMU liefert pmu_is_vbus_in() IMMER false → der
     // VBUS-Timer würde mitten in der Fahrt einschlafen (Gyro weckt sofort →
     // Dauerschleife, Modem-Boot-Storm). Ohne verlässliches VBUS-Signal NICHT
     // über den VBUS-Timer schlafen; dann entscheidet nur die Gyro-Inaktivität.
-    bool vbus_sleep = pmu_ok() && (vbus_gone_ms >= SLEEP_NO_VBUS_MS);
+    // 1.6.2: Aussteigen, Ladestecker anstecken, wieder einsteigen — solange sich
+    // etwas bewegt, wach bleiben und auf die Spannung warten. Schlafen erst,
+    // wenn VBUS >= 3 min weg UND 2 min Ruhe; spaetestens nach 15 min (Tragen
+    // ohne VBUS darf den Akku nicht leeren). Ohne VBUS sendet der Stick nie.
+    uint32_t shake = gyro_ok() ? gyro_last_shake_ms() : 0;
+    bool quiet = !gyro_ok() || shake == 0 || (shake <= now && (now - shake) >= SLEEP_NO_VBUS_QUIET_MS);
+    bool vbus_sleep = pmu_ok() && ((vbus_gone_ms >= SLEEP_NO_VBUS_MS && quiet) ||
+                                   vbus_gone_ms >= SLEEP_NO_VBUS_MAX_MS);
 
     // Gyro-Fallback: kein VBUS aber Bewegung → wach bleiben (z.B. Transport)
     // Erst prüfen wenn VBUS mindestens 15s weg ist — kurze Glitches ignorieren.
@@ -231,8 +240,8 @@ void sleep_update() {
     // ─── Kein Client → Deep Sleep ───────────────────────
     char msg[96];
     if (vbus_sleep) {
-        snprintf(msg, sizeof(msg), "Deep Sleep: VBUS weg seit %lu min",
-                 SLEEP_NO_VBUS_MS / 60000UL);
+        snprintf(msg, sizeof(msg), "Deep Sleep: VBUS weg seit %lu s, %s",
+                 (unsigned long)(vbus_gone_ms / 1000UL), quiet ? "2 min Ruhe" : "15-min-Grenze");
     } else {
         snprintf(msg, sizeof(msg), "Deep Sleep: %lu min keine Gyro-Bewegung",
                  SLEEP_INACTIVITY_MS / 60000UL);

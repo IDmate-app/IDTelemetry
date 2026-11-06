@@ -47,6 +47,7 @@ static char s_gps_src[8] = "ext";
 static bool s_mod_gps         = true;   // Default: GPS vorhanden
 static bool s_mod_compass     = false;  // FIXES B.17: Default aus (kein Treiber aktiv, Setting persistiert nur)
 static bool s_log_can         = LOG_CAN_ENABLED_DEFAULT;
+static bool s_can_vbus        = false;   // 1.6.2: OBD-Spannung geschaltet → VBUS reicht zum Senden
 static bool s_log_ble         = LOG_BLE_ENABLED_DEFAULT;
 static bool s_log_wifi        = LOG_WIFI_ENABLED_DEFAULT;
 static char s_lang[8]         = "de";
@@ -91,6 +92,7 @@ void cfg_init() {
     s_mod_gps     = p.getBool("mod_gps",     true);
     s_mod_compass = p.getBool("mod_compass", false);
     s_log_can     = p.getBool("log_can", LOG_CAN_ENABLED_DEFAULT);
+    s_can_vbus    = p.getBool("can_vbus", false);
     s_log_ble     = p.getBool("log_ble", LOG_BLE_ENABLED_DEFAULT);
     s_log_wifi    = p.getBool("log_wifi", LOG_WIFI_ENABLED_DEFAULT);
     pref_load(p, "lang", s_lang, sizeof(s_lang), "de");
@@ -131,6 +133,7 @@ bool        cfg_ble_standby()  { return s_ble_standby; }
 bool        cfg_mod_gps()      { return s_mod_gps; }
 bool        cfg_mod_compass()  { return s_mod_compass; }
 bool        cfg_log_can()      { return s_log_can; }
+bool        cfg_can_vbus()     { return s_can_vbus; }
 bool        cfg_log_ble()      { return s_log_ble; }
 bool        cfg_log_wifi()     { return s_log_wifi; }
 const char* cfg_lang()         { return s_lang; }
@@ -259,6 +262,10 @@ bool cfg_save_json(const uint8_t* body, size_t len) {
         s_mod_compass = doc["mod_compass"].as<bool>();
         p.putBool("mod_compass", s_mod_compass);
     }
+    if (!doc["can_vbus"].isNull()) {
+        s_can_vbus = doc["can_vbus"].as<bool>();
+        p.putBool("can_vbus", s_can_vbus);
+    }
     if (!doc["log_can"].isNull()) {
         s_log_can = doc["log_can"].as<bool>();
         p.putBool("log_can", s_log_can);
@@ -314,6 +321,7 @@ const char* cfg_to_json() {
     doc["mod_gps"]      = s_mod_gps;
     doc["mod_compass"]  = s_mod_compass;
     doc["log_can"]      = s_log_can;
+    doc["can_vbus"]     = s_can_vbus;
     doc["log_ble"]      = s_log_ble;
     doc["log_wifi"]     = s_log_wifi;
     doc["lang"]         = s_lang;

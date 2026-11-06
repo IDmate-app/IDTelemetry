@@ -255,6 +255,16 @@
     <div class="hint" style="display:none" data-i18n="cfg.compass_hint">Compass on I2C Wire0 (GPIO45/21). Disable if not fitted.</div>
   </div>
 
+  <!-- CAN-Schutz -->
+  <div class="section-title" data-i18n="cfg.canguard_title">CAN-Bus &amp; Fahrzeugalarm</div>
+  <div class="card">
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+      <input type="checkbox" id="can_vbus" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.can_vbus">OBD-Spannung ist geschaltet (geht beim Aussteigen weg)</span>
+    </label>
+    <div class="hint" data-i18n="cfg.can_vbus_hint">An: Solange Spannung da ist, ist das Auto wach — der Stick liest auch ohne Bewegung (z. B. beim Laden). Aus: Dauerplus am OBD — Lesen nur mit Spannung UND Bewegung, damit ein schlafendes Auto nicht geweckt wird. Ohne Spannung sendet der Stick nie, er hört nur mit.</div>
+  </div>
+
   <!-- SPIFFS Logs -->
   <div class="section-title" data-i18n="cfg.log_title">SPIFFS Logging</div>
   <div class="card">
@@ -415,6 +425,7 @@ async function loadConfig(){
     if (rb) rb.checked = true;
     document.getElementById('mod_compass').checked = d.mod_compass === true;
     document.getElementById('log_can').checked = d.log_can === true;
+    document.getElementById('can_vbus').checked = d.can_vbus === true;
     document.getElementById('log_ble').checked = d.log_ble === true;
     document.getElementById('lang').value = d.lang || 'de';
     document.getElementById('save-status').textContent=t('cfg.loaded');
@@ -451,6 +462,7 @@ async function saveConfig(){
     gps_src:      (document.querySelector('input[name=gps_src]:checked') || {}).value || 'ext',
     mod_compass:  document.getElementById('mod_compass').checked,
     log_can:      document.getElementById('log_can').checked,
+    can_vbus:     document.getElementById('can_vbus').checked,
     log_ble:      document.getElementById('log_ble').checked,
     lang:         document.getElementById('lang').value,
   };
