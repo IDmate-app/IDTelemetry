@@ -23,7 +23,9 @@ Die Weboberfläche zeigt **keine** Firmware-Version an. Der Stick bleibt, bis
 der Abgleich steht, auf seiner jetzigen Firmware (läuft seit ~3 Monaten
 stabil).
 
-**Workflow:**
+**Workflow:** Schritt für Schritt in [`docs/LADEPAUSE.md`](docs/LADEPAUSE.md),
+Zerlegen mit `tools/stick_dump.py` (Partitionen, Logs, Ringpuffer,
+Commit-Vergleich über die Texte der Firmware).
 
 1. **Sichern, ohne die Stick-Software zu benutzen:** vollständiges Flash-Abbild
    über USB am PC, gelesen vom ROM-Bootloader (die Firmware läuft dabei nicht
@@ -39,8 +41,9 @@ stabil).
    `sys.log` / `elm.log`. → **Privat aufbewahren, nicht hochladen.**
 
 2. **Teile herauslösen** (aus dem Abbild, offline):
-   - Firmware: `app0` ab `0x10000`, 2 MB → nur dieser Teil wird verglichen
-     und darf weitergegeben werden.
+   - Firmware: `app0` ab `0x10000`, 2 MB → nur dieser Teil wird verglichen.
+     Nicht öffentlich weitergeben: ein privat gebauter Stand kann Werte aus
+     `secrets.h` (AES-Key) einkompiliert haben.
    - Logs: SPIFFS ab `0x720000` (Full) bzw. `0x320000` (Lite) mit `mkspiffs -u`
      entpacken → `sys.log`, `elm.log`.
    - Zusätzlich, falls einfacher: Stick normal starten, serielles Terminal
@@ -48,7 +51,8 @@ stabil).
 
 3. **Version bestimmen:** Erster Blick: Die Weboberfläche zeigt die Version
    seit 19.03.2026 (Commit `75959eb`) klein und grau neben „TS.DEBUG“. Fehlt sie
-   wirklich, ist der Stand älter. Dann im Image: Im App-Image steht die ESP-IDF-Beschreibung
+   wirklich, ist der Stand älter. Das Kompilierdatum in `esp_app_desc_t` taugt
+   bei Arduino nicht (stammt aus der vorgebauten Bibliothek). Dann im Image: Im App-Image steht die ESP-IDF-Beschreibung
    (`esp_app_desc_t`: Kompilierdatum/-zeit, IDF-Version) und alle Log-Texte der
    Firmware. Kompilierdatum → welche Commits es damals gab; Log-Texte und
    `FW_VERSION`-String → welcher Stand (z. B. „Baudrate erkannt“ = GPS-Fix vom
