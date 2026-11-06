@@ -45,6 +45,9 @@ static void send_embedded(AsyncWebServerRequest* r, const uint8_t* start,
     while (len > 0 && start[len - 1] == 0) len--;
     auto* resp = r->beginResponse_P(200, mime, start, len);
     if (html) headers_apply(resp);
+    // Seiten stecken in der Firmware: nach einem Flash darf der Browser keinen
+    // alten Stand aus dem Cache zeigen (alte debug.html → alte Log-Endpunkte).
+    if (resp) resp->addHeader("Cache-Control", "no-store");
     r->send(resp);
 }
 
@@ -585,32 +588,42 @@ void ble_web_routes_init() {
         r->send(200, "application/json", out);
     });
 
-    // Logs koennen gross werden (bis 1MB) — nicht in Heap laden.
-    // Snapshot per KOPIE (nicht Rename): das Original bleibt erhalten, ein
-    // Abruf leert das Log nicht mehr (ROADMAP 1). Kopiert wird in Bloecken
-    // unter spiffs_lock, wie es spiffs_append_ring beim Kuerzen auch tut.
-    auto snapshot_and_send = [](AsyncWebServerRequest* r, const char* path, const char* snap) {
-        if (!spiffs_lock(3000)) { r->send(503, "text/plain", "busy"); return; }
-        if (SPIFFS.exists(snap)) SPIFFS.remove(snap);
-        bool have = false;
-        File src = SPIFFS.open(path, "r");
-        if (src) {
-            File dst = SPIFFS.open(snap, "w");
-            if (dst) {
-                uint8_t buf[1024];
-                while (src.available()) {
-                    int n = src.read(buf, sizeof(buf));
-                    if (n <= 0) break;
-                    dst.write(buf, n);
-                }
-                have = dst.size() > 0;
-                dst.close();
-            }
-            src.close();
-        }
+    // Logs koennen gross werden (bis 1MB) — nicht in Heap laden, nicht kopieren.
+    // Gestreamt in 2-KB-Stuecken direkt aus der Originaldatei; spiffs_lock nur
+    // pro Stueck (Writer warten max. ein paar ms). Nicht destruktiv (ROADMAP 1).
+    // Frueher: Rename (leerte das Log); 1.5.0: Kopie unter Lock (bei 730 KB
+    // mehrere Sekunden async_tcp blockiert → Watchdog-Gefahr).
+    // Kuerzt der Ring die Datei waehrend des Downloads, endet er dort.
+    auto stream_log = [](AsyncWebServerRequest* r, const char* path, const char* fname) {
+        size_t total = 0;
+        if (!spiffs_lock(1000)) { r->send(503, "text/plain", "busy"); return; }
+        File f0 = SPIFFS.open(path, "r");
+        if (f0) { total = f0.size(); f0.close(); }
         spiffs_unlock();
-        if (!have) { r->send(200, "text/plain", "# leer\n"); return; }
-        r->send(SPIFFS, snap, "text/plain", true);
+        if (total == 0) { r->send(200, "text/plain", "# leer\n"); return; }
+        String p(path);
+        auto* resp = r->beginChunkedResponse("text/plain",
+            [p, total](uint8_t* buf, size_t maxLen, size_t index) -> size_t {
+                if (index >= total) return 0;
+                size_t want = total - index;
+                if (want > maxLen) want = maxLen;
+                if (want > 2048)   want = 2048;
+                if (!spiffs_lock(50)) return RESPONSE_TRY_AGAIN;
+                size_t n = 0;
+                File f = SPIFFS.open(p, "r");
+                if (f) {
+                    if (f.size() > index && f.seek(index)) n = f.read(buf, want);
+                    f.close();
+                }
+                spiffs_unlock();
+                return n;   // 0 = Ende (auch wenn die Datei inzwischen kuerzer ist)
+            });
+        if (!resp) { r->send(503, "text/plain", "busy"); return; }
+        char cd[64];
+        snprintf(cd, sizeof(cd), "attachment; filename=\"%s\"", fname);
+        resp->addHeader("Content-Disposition", cd);
+        resp->addHeader("Cache-Control", "no-store");
+        r->send(resp);
     };
 
     // Vorschau der Debug-Seite: nur das Dateiende lesen (?n=Bytes, max 16 KB),
@@ -642,13 +655,14 @@ void ble_web_routes_init() {
         if (out.length() == 0) out = "# leer\n";
         auto* resp = r->beginResponse(200, "text/plain", out);
         headers_apply(resp);
+        if (resp) resp->addHeader("Cache-Control", "no-store");
         r->send(resp);
     };
     server.on("/sys-log-tail", HTTP_GET, [tail_send](AsyncWebServerRequest* r) { tail_send(r, "/sys.log"); });
     server.on("/elm-log-tail", HTTP_GET, [tail_send](AsyncWebServerRequest* r) { tail_send(r, "/elm.log"); });
 
-    server.on("/download-sys-log", HTTP_GET, [snapshot_and_send](AsyncWebServerRequest* r) {
-        snapshot_and_send(r, "/sys.log", "/sys.log.snap");
+    server.on("/download-sys-log", HTTP_GET, [stream_log](AsyncWebServerRequest* r) {
+        stream_log(r, "/sys.log", "sys.log");
     });
     server.on("/clear-sys-log", HTTP_POST, [](AsyncWebServerRequest* r) {
         if (spiffs_lock(500)) {
@@ -659,8 +673,8 @@ void ble_web_routes_init() {
         r->send(200, "application/json", "{\"ok\":true}");
     });
 
-    server.on("/download-elm-log", HTTP_GET, [snapshot_and_send](AsyncWebServerRequest* r) {
-        snapshot_and_send(r, "/elm.log", "/elm.log.snap");
+    server.on("/download-elm-log", HTTP_GET, [stream_log](AsyncWebServerRequest* r) {
+        stream_log(r, "/elm.log", "elm.log");
     });
     server.on("/clear-elm-log", HTTP_POST, [](AsyncWebServerRequest* r) {
         if (spiffs_lock(500)) {

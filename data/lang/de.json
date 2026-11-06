@@ -46,11 +46,11 @@
 
   "cfg.gps_title": "GPS-Quelle & Module",
   "cfg.gps_source": "GPS-Quelle",
-  "cfg.gps_ext": "Externes GNSS (BLITZ Mini M10, UART) — <em>empfohlen</em>",
+  "cfg.gps_ext": "Externes GNSS (u-blox DAN-F10N, L1+L5, UART) — <em>empfohlen</em>",
   "cfg.gps_int": "Internes GNSS (SIM7080G) — nur Full-Variante",
   "cfg.gps_off": "Aus",
-  "cfg.gps_hint": "Externes M10 wird empfohlen — hält einen Fix während LTE läuft (geteiltes Funkmodul beim internen SIM7080G-GNSS). Lite-Variante muss extern nutzen (kein internes GNSS verfügbar).",
-  "cfg.compass_label": "Kompass (QMC5883L auf BLITZ M10)",
+  "cfg.gps_hint": "Externes GNSS wird empfohlen — es hält den Fix, während LTE läuft (das interne SIM7080G-GNSS teilt sich das Funkmodul mit LTE). Die Lite-Variante muss extern nutzen (kein internes GNSS).",
+  "cfg.compass_label": "Kompass (QMC5883L, nur BLITZ M10)",
   "cfg.compass_hint": "Kompass auf I2C Wire0 (GPIO45/21). Deaktivieren wenn nicht bestückt.",
 
   "cfg.ble_title": "BLE / ABRP",

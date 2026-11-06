@@ -46,11 +46,11 @@
 
   "cfg.gps_title": "GPS source & modules",
   "cfg.gps_source": "GPS source",
-  "cfg.gps_ext": "External GNSS (BLITZ Mini M10, UART) — <em>recommended</em>",
+  "cfg.gps_ext": "External GNSS (u-blox DAN-F10N, L1+L5, UART) — <em>recommended</em>",
   "cfg.gps_int": "Internal GNSS (SIM7080G) — full variant only",
   "cfg.gps_off": "Off",
-  "cfg.gps_hint": "External M10 is preferred — it keeps a fix while LTE runs (shared radio limits in SIM7080G internal GNSS). Lite variant must use external (no internal GNSS available).",
-  "cfg.compass_label": "Compass (QMC5883L on BLITZ M10)",
+  "cfg.gps_hint": "External GNSS is preferred — it keeps its fix while LTE runs (the internal SIM7080G GNSS shares the radio with LTE). The Lite variant must use external (no internal GNSS).",
+  "cfg.compass_label": "Compass (QMC5883L, BLITZ M10 only)",
   "cfg.compass_hint": "Compass on I2C Wire0 (GPIO45/21). Disable if not fitted.",
 
   "cfg.ble_title": "BLE / ABRP",
