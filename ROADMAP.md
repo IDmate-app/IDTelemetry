@@ -174,6 +174,36 @@ zeichnet weiter alle Zeilen auf und bedient ABRP, sendet aber nichts mehr bis
 zum nächsten Neustart. Dann lädt er hunderte bis tausende Zeilen am Stück nach;
 in IDmate fehlt solange der Verlauf der Fahrt.
 
+**Analyse (Code, 2026-11-06) — drei Kandidaten, Fix auf `next-1.5` als
+eigener Commit:**
+
+1. **„Keine SIM“ ist endgültig (stärkster Verdacht für „bis zum Neustart“).**
+   Jeder Netzsuch-Versuch endet im Auto-Modus (`COPS=0`), das Modem sucht dann
+   selbst weiter. Der nächste Versuch beginnt mit `AT+CPIN?`; im Funkloch ist
+   das Modem beschäftigt und antwortet „SIM busy“ oder gar nicht. Ein einziger
+   Fehlschlag → `STATE_CHECK_SIM` → „Keine SIM · GPS-only Modus“ →
+   `STATE_RUNNING` mit `s_sim_ok = false`. Die ganze MQTT-Eskalation hängt an
+   `s_sim_ok` → **nie wieder ein Verbindungsversuch** bis zum Neustart. Zeilen
+   werden weiter aufgezeichnet, ABRP läuft weiter — genau das Bild.
+   *Fix:* 3 Versuche im Abstand von 5 s, bevor „Keine SIM“ gilt; danach im
+   Betrieb alle 60 s neu prüfen und bei READY regulär suchen.
+2. **Blindes Warten im Backoff.** Nach Fehlversuchen wartet der Stick 60 s,
+   5 min, dann je 15 min, ohne nachzusehen, ob das Modem inzwischen selbst ein
+   Netz gefunden hat. Ein Versuch dauert zusätzlich 3–8 min. Kurze Fahrt nach
+   Start in der Tiefgarage → ganze Fahrt ohne Upload, nach dem nächsten Start
+   alles am Stück. *Fix:* während des Backoffs alle 15 s den
+   Registrierungsstatus lesen; erlaubtes Netz → sofort GPRS + MQTT (ohne neue
+   Suche, die das Netz in Phase 0 wieder abmelden würde).
+3. **PWRKEY-„Reset“ schaltet um.** Stufe 2 der Eskalation gibt einen
+   PWRKEY-Impuls; beim SIM7080 schaltet der an ↔ aus. War das Modem an, ist es
+   danach womöglich aus, und erst der nächste Reset schaltet es wieder ein.
+   *Fix:* antwortet nach dem Impuls nichts, zweiter Impuls und bis 10 s auf AT
+   warten, Echo wieder aus.
+
+**Belege im geretteten `sys.log` suchen:**
+`grep -n "Keine SIM\|SIM-Status unerwartet\|SIM nicht READY\|Kein Operator\|Modem-Reset\|REBOOT-LIMIT" sys.log`
+— „Keine SIM · GPS-only“ nach einem Start ohne Netz bestätigt Kandidat 1.
+
 **Zu prüfen (`mod_modem.cpp`):**
 
 - Netzsuche mit Backoff (60 s → 5 min → 15 min, B.12): kommt der Zustand nach
