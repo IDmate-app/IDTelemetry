@@ -3,7 +3,9 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
-## [1.5.0] – unreleased (branch `next-1.5`, not flashed yet)
+## [1.5.0] – 2026-11-06
+
+Replaces the mixed state found on the author's stick (FW_VERSION "1.2.0" + August GPS work, without the 1.3.0/1.4.0 fixes); everything in that image is contained here. The SoE / HVAC / cabin-temperature formulas are still open: until they are filled in, those fields are polled and logged raw but not sent.
 
 ### Added
 
