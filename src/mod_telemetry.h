@@ -47,9 +47,9 @@ enum TelemField {
     TELEM_BATT_DEVICE,
     // Firmware 1.5.0: Werte, die ABRP vom Stick liest (ROADMAP 2).
     // NUR hinten anhaengen: Slot-Layout und Payload-Bits haengen an der Reihenfolge.
-    TELEM_SOE,            // Energieinhalt laut BMS (kWh), DID 0x0364
-    TELEM_HVAC_KW,        // Klimaleistung (kW), DID 0x2613 (Vermutung)
-    TELEM_CABIN_TEMP,     // Innentemperatur (°C), DID 0x2613 (Vermutung)
+    TELEM_SOE,            // Energieinhalt laut BMS (kWh), DID 0x2AB8 (ECU 710)
+    TELEM_HVAC_KW,        // HV-Nebenverbraucher inkl. Heizung/Klima (kW), DID 0x0364 (FC0076)
+    TELEM_CABIN_TEMP,     // Innentemperatur (°C), DID 0x2613 (ECU 746)
     TELEM_FIELD_COUNT
 };
 
