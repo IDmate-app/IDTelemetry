@@ -88,30 +88,52 @@ def find_mkspiffs():
     return shutil.which('mkspiffs')
 
 
+SYS_RE = re.compile(rb'\[[0-9: .\-]{5,19}\]\t[A-Z_]{2,8} *\t[^\n\x00\xff]{1,130}\n')
+ELM_RE = re.compile(rb'[0-9: .\-]{5,23} \| [^|\n\x00\xff]{1,12} \| [0-9A-F]{3,8} \| [^\n\x00\xff]{1,140}\r?\n')
+
+
+def carve_logs(blob):
+    """Logzeilen aus ALLEN SPIFFS-Seiten, auch geloeschten/ueberschriebenen:
+    SPIFFS gibt Seiten erst bei der Garbage Collection frei, alte .snap-
+    Dateien und gekuerzte Ringe liegen oft noch im Flash. Zwei Durchgaenge:
+    roh und mit entfernten 5-Byte-Seitenkoepfen (Zeilen ueber Seitengrenzen)."""
+    stripped = b''.join(blob[o + 5:o + 256] for o in range(0, len(blob), 256))
+    out = {}
+    for name, rx in (('sys', SYS_RE), ('elm', ELM_RE)):
+        lines = set()
+        for src in (blob, stripped):
+            for m in rx.finditer(src):
+                lines.add(m.group().decode('utf-8', 'replace').replace('\r', ''))
+        out[name] = sorted(lines)
+    return out
+
+
 def spiffs_extract(blob, out_dir):
     os.makedirs(out_dir, exist_ok=True)
     tool = find_mkspiffs()
     raw = os.path.join(out_dir, '..', 'spiffs.bin')
     with open(raw, 'wb') as f:
         f.write(blob)
+    msgs = []
     if tool:
         r = subprocess.run([tool, '-u', out_dir, '-b', '4096', '-p', '256', '-s', str(len(blob)), raw],
                            capture_output=True, text=True)
-        files = os.listdir(out_dir)
+        files = sorted(os.listdir(out_dir))
         if r.returncode == 0 and files:
-            return f'mkspiffs: {len(files)} Dateien → {out_dir}: ' + ', '.join(sorted(files))
-        msg = f'mkspiffs fehlgeschlagen ({r.returncode}): {r.stderr.strip()[:200]}'
+            sizes = ', '.join(f'{f} ({os.path.getsize(os.path.join(out_dir, f))} B)' for f in files)
+            msgs.append(f'mkspiffs: {len(files)} Dateien → {out_dir}: {sizes}')
+        else:
+            msgs.append(f'mkspiffs fehlgeschlagen ({r.returncode}): {r.stderr.strip()[:200]}')
     else:
-        msg = 'mkspiffs nicht gefunden (PlatformIO: pio pkg install -g -t platformio/tool-mkspiffs)'
-    # Notlösung: Syslog-Zeilen "[Zeit]\tKAT\tText" aus den Seiten schneiden.
-    # SPIFFS-Seiten = 256 B mit 5 B Kopf; Zeilen über Seitengrenzen gehen verloren.
-    lines = set()
-    for m in re.finditer(rb'\[[0-9: .\-]{5,19}\]\t[A-Z_]{2,8} *\t[\x20-\x7e\xc0-\xff\x80-\xbf]{1,120}\n', blob):
-        lines.add(m.group().decode('utf-8', 'replace'))
-    carved = os.path.join(out_dir, '..', 'spiffs_carved_sys.log')
-    with open(carved, 'w') as f:
-        f.writelines(sorted(lines))
-    return f'{msg}\nNotlösung: {len(lines)} Syslog-Zeilen herausgeschnitten → {carved} (Reihenfolge nach Zeit sortiert, unvollständig)'
+        msgs.append('mkspiffs nicht gefunden (PlatformIO: pio pkg install -g -t platformio/tool-mkspiffs)')
+    # Immer zusaetzlich: auch geloeschte Seiten durchsuchen (alte Snapshots, Ring-Reste)
+    for name, lines in carve_logs(blob).items():
+        path = os.path.join(out_dir, '..', f'spiffs_carved_{name}.log')
+        with open(path, 'w') as f:
+            f.writelines(lines)
+        msgs.append(f'Herausgeschnitten inkl. geloeschter Seiten: {len(lines)} {name}-Zeilen → {path} '
+                    f'(nach Zeit sortiert, Duplikate entfernt)')
+    return '\n'.join(msgs)
 
 
 def telem_summary(blob):
