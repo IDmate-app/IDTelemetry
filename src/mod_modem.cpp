@@ -1130,7 +1130,27 @@ static void modem_task(void* /*param*/) {
                                 }
                                 s_mqtt_reconnect_ms = millis();
 
-                            // ── Stufe 2: Modem-Reset (PWRKEY) ──
+                            // ── Stufe 2a: Funk neu aufbauen wie nach dem Boot (ohne PWRKEY) ──
+                            // ROADMAP 5: In den Logs war der PWRKEY-Impuls schaedlich —
+                            // danach durchgehend reg=-1 (Modem aus), erst der Eskalations-
+                            // Neustart nach 20-35 min half, und der baute ohne Modem-Reset
+                            // in 20 s auf: Registrierung, PDP, SMCONF, SMCONN. Genau das
+                            // zuerst, ohne den ESP neu zu starten.
+                            } else if (s_mqtt_fail_count >= MQTT_FAIL_RESET_COUNT && s_modem_reset_count == 0) {
+                                syslog("MODEM", "Funk neu aufbauen (wie nach Boot): MQTT/PDP trennen, neu registrieren");
+                                s_modem.sendAT("+SMDISC");
+                                s_modem.waitResponse(3000L);
+                                s_modem.sendAT("+CNACT=0,0");
+                                s_modem.waitResponse(5000L);
+                                s_connected = false;
+                                s_mqtt_fail_count = 0;
+                                s_modem_reset_count++;
+                                s_mqtt_reconnect_ms = millis();
+                                scan_fail_count = 0;
+                                state = STATE_WAIT_FOR_NETWORK;
+                                break;
+
+                            // ── Stufe 2b: Modem-Reset (PWRKEY) ──
                             } else if (s_mqtt_fail_count >= MQTT_FAIL_RESET_COUNT) {
                                 syslog("MODEM", "Modem-Reset nach Reconnect-Fehlern (PWRKEY)");
                                 s_modem.sendAT("+CNACT=0,0");
@@ -1184,6 +1204,12 @@ static void modem_task(void* /*param*/) {
                                     } else {
                                         s_mqtt_fail_count++;
                                         syslog("MQTT", "Reconnect: GPRS OK aber MQTT-Connect fehlgeschlagen");
+                                        // ROADMAP 5: Ein PDP-Kontext, der "aktiv" meldet, aber nichts
+                                        // durchlaesst, wurde bisher nie erneuert (ensure_connected
+                                        // kehrt sofort zurueck). Trennen → naechster Versuch baut neu auf.
+                                        s_modem.sendAT("+CNACT=0,0");
+                                        s_modem.waitResponse(5000L);
+                                        s_connected = false;
                                     }
                                 } else {
                                     // GPRS fehlgeschlagen (z.B. 0.0.0.0 oder echte Trennung).
