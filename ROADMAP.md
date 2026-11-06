@@ -52,10 +52,9 @@ Commit-Vergleich über die Texte der Firmware).
 3. **Version bestimmen:** Erster Blick: Die Weboberfläche zeigt die Version
    seit 19.03.2026 (Commit `75959eb`) klein und grau neben „TS.DEBUG“. Fehlt sie
    wirklich, ist der Stand älter. Das Kompilierdatum in `esp_app_desc_t` taugt
-   bei Arduino nicht (stammt aus der vorgebauten Bibliothek). Dann im Image: Im App-Image steht die ESP-IDF-Beschreibung
-   (`esp_app_desc_t`: Kompilierdatum/-zeit, IDF-Version) und alle Log-Texte der
-   Firmware. Kompilierdatum → welche Commits es damals gab; Log-Texte und
-   `FW_VERSION`-String → welcher Stand (z. B. „Baudrate erkannt“ = GPS-Fix vom
+   bei Arduino nicht (stammt aus der vorgebauten Bibliothek). Entscheidend
+   sind die Log-Texte im Image: `stick_dump.py --repo` vergleicht sie mit
+   allen Commits; Log-Texte und `FW_VERSION`-String → welcher Stand (z. B. „Baudrate erkannt“ = GPS-Fix vom
    26.08., L1+L5-Texte = 1.4.0).
 
 4. **Unterschiede finden:** Kandidaten-Commits bauen, Strings und Funktionen
