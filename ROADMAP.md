@@ -350,18 +350,12 @@ Grundsatz: **Prüfen kostet keine SIM-Daten, Laden nur nach Zustimmung.**
    eingeschlossen) und vergleicht mit der Firmware, die der Stick im
    Info-Telegramm meldet. Dashboard: „Update X verfügbar → Release-Seite“.
    Kein Byte über die SIM. Abschaltbar mit `STICK_UPDATE_CHECK=0`.
-2. **Installieren über WLAN zu Hause (Standard).** Knopf „installieren“ in
-   IDmate → Befehl per MQTT (`…/ack`-Topic, das der Stick schon abonniert)
-   mit Version, Größe und **SHA-256** (GitHub veröffentlicht sie je Asset).
-   Der Stick merkt sich den Auftrag in NVS. Beim nächsten Kontakt mit dem
-   Heim-WLAN lädt er die Datei (~1,5 MB, Sekunden) über IDmate als
-   Zwischenstation, prüft SHA-256 beim Schreiben und installiert nur bei
-   Übereinstimmung. Liegt ein genehmigter Auftrag an, schiebt er das
-   Einschlafen bis zum Ende auf (eigener Akku). Danach Absturzschutz und
-   Rückweg wie bei 1.6.0.
-3. **Sofort über LTE-M (nur ausdrücklich).** Zweiter Knopf mit Hinweis „ca.
-   1,5 MB über die SIM“ (Things Mobile grob 5–12 ct/MB → ~8–20 ct pro Update).
-   Download über das HTTP des SIM7080G von IDmate, 1–3 min, gleiche Prüfungen.
+2. **Entschieden (2026-11-06): kein Download durch den Stick.** Über LTE-M
+   wäre der Engpass die UART zwischen ESP32 und Modem (115.200 Bd ≈ 11 KB/s →
+   3–5 min für 1,5 MB), dazu HTTP-Stack im Modem, Prüfsumme, Fortschritt —
+   viel Aufwand für wenig Gewinn. Stattdessen: IDmate verlinkt direkt die
+   passende `.bin` (IDmate 1.2.258), Upload wie gehabt über die Konfig-Seite
+   des Sticks. Am Stick ist dafür nichts zu ändern.
 
 Die Firmware ist ~1,5 MB (`idtelemetry-full-*.bin`), nicht 16 MB — die 16 MB
 sind der ganze Flash mit Logs, Puffer und Konfiguration.
