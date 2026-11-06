@@ -200,7 +200,8 @@ Diese Fixes berühren Modem-Power, Sleep-Pfade, AP-Handling oder Cross-Core-Conc
 - **Warum [RISIKO]**: Auth kann den Besitzer aussperren; AP-Handling hat eine bekannte ipc0-PANIC-Geschichte (siehe C.4). Lockout-Fallback (z. B. Boot-Taste = Auth-Reset) einplanen.
 - **Schwere**: P1 · **Aufwand**: mittel-hoch + Testaufbau
 
-### [ ] C.2 — Eskalations-Stufe „Modem-Reset" resettet evtl. gar nicht — und re-initialisiert nie
+### [~] C.2 — Eskalations-Stufe „Modem-Reset" resettet evtl. gar nicht — und re-initialisiert nie
+- **Stand 1.5.0 (teilweise):** Log-Befund vom Stick (Sept.–Nov. 2026): nach dem PWRKEY-Impuls durchgehend `reg=-1`, erst der Eskalations-Neustart half (ROADMAP 5). In 1.5.0 ist die erste Eskalation ein Neuaufbau wie nach dem Boot (`STATE_WAIT_FOR_NETWORK`: `ensure_sim_ready()` → Registrierung → PDP → SMDISC/SMCONF/SMCONN), PWRKEY erst danach, mit Wiedereinschalten. Offen: `AT+CFUN=1,1` statt PWRKEY, `configure_radio()` nach echtem Reset.
 - **Datei**: `src/mod_modem.cpp:1042-1059`, `:74-80`
 - **Problem**: (a) `modem_pwrkey_pulse()` hält PWRKEY 1,0 s — SIM7080G braucht für Power-**Off** ≥ 1,2 s → der „Reset" eines hängenden Modems ist möglicherweise ein No-op. (b) Falls doch resettet: danach nur `testAT`, **kein `ensure_sim_ready()`** (PIN-SIM bleibt gesperrt) und kein `configure_radio()` → mit PIN-SIM können Stufe 2+3 nie gelingen → bis zu ~3 unnötige Full-Reboots pro Funkloch-Episode.
 - **Fix**: Reset deterministisch per `AT+CFUN=1,1`; danach `ensure_sim_ready()` + `configure_radio()`.
