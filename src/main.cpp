@@ -43,6 +43,7 @@
 #include "mod_mqtt.h"
 #include "mod_sleep.h"
 #include "mod_telemetry.h"
+#include "mod_ota.h"
 #include "mod_wifi_upload.h"
 #include "mod_config.h"
 #include <NimBLEDevice.h>
@@ -186,6 +187,10 @@ void setup() {
     // bis zu 60s auf USB-Host-Enumeration bevor setup() weiterläuft
     // Wake-Grund SOFORT als allererstes — vor Serial, delay, allem
     sleep_init();
+    // Absturzschutz nach Web-Update (so frueh wie moeglich, damit auch ein
+    // Absturz waehrend der Init zaehlt): 3 Abstuerze der neuen Firmware
+    // in Folge → vorherige Firmware
+    ota_boot_guard();
 
     Serial.setTxTimeoutMs(0);
     Serial.begin(115200);
@@ -201,6 +206,7 @@ void setup() {
     // 1. WiFi + Web
     web_init();
     logs_init();
+    ota_boot_log();
     { char m[64]; snprintf(m, sizeof(m), "AP: %s · http://192.168.4.1", cfg_ap_ssid()); syslog("WEB", m); }
     sleep_log_wakeup_syslog();  // Wake-Log jetzt senden (logs_init muss vorher laufen)
     ble_web_routes_init();
@@ -298,6 +304,7 @@ void setup() {
 }
 
 void loop() {
+    ota_stable_tick();
     // ── Serial-Befehle (Terminal) ──
     static char serial_buf[80];
     static uint8_t serial_pos = 0;

@@ -15,6 +15,7 @@
 #include <SPIFFS.h>
 #include <Update.h>
 #include <esp_ota_ops.h>
+#include "mod_ota.h"
 
 // ── Eingebettete Web-Assets ─────────────────────────────────
 // Linker-Symbole von board_build.embed_txtfiles in platformio.ini.
@@ -227,8 +228,7 @@ void web_init() {
             char cal[96]; telem_cal_str(cal, sizeof(cal));
             doc["cal_2ab8"] = cal;
         }
-        // Web-OTA geht nur mit zweitem App-Platz (partitions.csv hat einen)
-        doc["ota_possible"] = esp_ota_get_next_update_partition(NULL) != nullptr;
+        ota_status_json(doc);   // ota_possible, ota_slot, ota_other_build
         doc["uptime"]      = millis();
         doc["can_ok"]      = can_hw_ok();
         doc["log_cnt"]     = log_count;
@@ -735,35 +735,51 @@ void ble_web_routes_init() {
         }
     );
 
-    // ── OTA Firmware-Upload ────────────────────────────────────
+    // ── OTA Firmware-Upload (1.6.0: zwei App-Plaetze, mod_ota) ──
+    // Formular: Feld "pw" (AP-Passwort) VOR der Datei "firmware".
     server.on("/api/ota", HTTP_POST,
         [](AsyncWebServerRequest* r) {
-            bool ok = !Update.hasError();
-            AsyncWebServerResponse* resp = r->beginResponse(
-                200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
+            const char* err = ota_last_error();
+            bool ok = ota_upload_ok() && err[0] == 0;
+            char body[64];
+            snprintf(body, sizeof(body), "{\"ok\":%s,\"err\":\"%s\"}", ok ? "true" : "false",
+                     ok ? "" : (err[0] ? err : "upload"));
+            AsyncWebServerResponse* resp = r->beginResponse(200, "application/json", body);
             resp->addHeader("Connection", "close");
             r->send(resp);
             if (ok) {
-                syslog("OTA", "Firmware-Update OK \xe2\x80\x93 Neustart\xe2\x80\xa6");
                 vTaskDelay(pdMS_TO_TICKS(500));
                 esp_restart();
             }
         },
         [](AsyncWebServerRequest* r, String filename, size_t index,
            uint8_t* data, size_t len, bool final) {
+            static bool s_go = false;
             if (!index) {
-                Serial.printf("[OTA] Start: %s\n", filename.c_str());
-                if (!Update.begin(UPDATE_SIZE_UNKNOWN))
-                    Serial.println("[OTA] begin() Fehler");
+                String pw = r->hasParam("pw", true) ? r->getParam("pw", true)->value() : String("");
+                s_go = ota_upload_begin(filename.c_str(), pw.c_str(), data, len);
+                if (!s_go) { Serial.printf("[OTA] abgelehnt: %s\n", ota_last_error()); }
             }
-            if (Update.write(data, len) != len)
-                Serial.println("[OTA] write() Fehler");
-            if (final) {
-                if (Update.end(true))
-                    Serial.printf("[OTA] OK: %u Bytes\n", index + len);
-                else
-                    Serial.println("[OTA] end() Fehler");
+            if (s_go && len) s_go = ota_upload_write(data, len);
+            if (final && s_go) {
+                s_go = false;
+                if (ota_upload_end()) Serial.printf("[OTA] OK: %u Bytes\n", (unsigned)(index + len));
             }
         }
     );
+
+    server.on("/api/ota-rollback", HTTP_POST, [](AsyncWebServerRequest* r) {
+        String pw = r->hasParam("pw", true) ? r->getParam("pw", true)->value() : String("");
+        const char* err = "";
+        bool ok = ota_rollback(pw.c_str(), &err);
+        char body[64];
+        snprintf(body, sizeof(body), "{\"ok\":%s,\"err\":\"%s\"}", ok ? "true" : "false", err);
+        AsyncWebServerResponse* resp = r->beginResponse(200, "application/json", body);
+        resp->addHeader("Connection", "close");
+        r->send(resp);
+        if (ok) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            esp_restart();
+        }
+    });
 }

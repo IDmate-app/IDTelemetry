@@ -46,6 +46,11 @@ jobs:
             cp "$b/partitions.bin" "dist/idtelemetry-$v-$V.partitions.bin"
             cp "$b/firmware.bin"   "dist/idtelemetry-$v-$V.bin"
           done
+          # otadata-Startwert (bootet app0): ohne ihn bootet ein per USB
+          # geflashter Stick nach einem Web-Update weiter den anderen Platz.
+          B0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          [ -n "$B0" ] || { echo "::error::boot_app0.bin not found"; exit 1; }
+          cp "$B0" "dist/idtelemetry-boot_app0-$V.bin"
           ls -l dist
 
       - uses: actions/upload-artifact@v4

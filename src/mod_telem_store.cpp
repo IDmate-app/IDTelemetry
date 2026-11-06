@@ -1,4 +1,5 @@
 #include "mod_telem_store.h"
+#include <Preferences.h>
 #include "mod_logs.h"
 #include <Arduino.h>
 #include <esp_partition.h>
@@ -248,6 +249,30 @@ void telem_store_init() {
     snprintf(m, sizeof(m), "Partition gefunden: %u KB · %u Slots à %u B",
              s_part->size / 1024, s_total_slots, SLOT_SIZE);
     syslog("STORE", m);
+
+    // 1.6.0: Partitionstabelle mit zweitem App-Platz — telem liegt an neuer
+    // Stelle (0x420000, 3 MB) mitten im alten 5-MB-Bereich. Ohne Loeschen
+    // laese boot_scan() Reste des alten Puffers als Zeilen. Lage + Groesse
+    // stehen in NVS; aendern sie sich, wird die Partition einmal geloescht.
+    {
+        Preferences p;
+        if (p.begin("telem", false)) {
+            uint32_t want = (s_part->address ^ (s_part->size << 4)) | 1u;
+            if (p.getUInt("layout", 0) != want) {
+                snprintf(m, sizeof(m), "Neues Partitions-Layout · telem @0x%06X wird einmalig geloescht",
+                         (unsigned)s_part->address);
+                syslog("STORE", m);
+                for (uint32_t off = 0; off < s_part->size; off += 0x10000) {
+                    uint32_t n = s_part->size - off < 0x10000 ? s_part->size - off : 0x10000;
+                    esp_partition_erase_range(s_part, off, n);
+                    vTaskDelay(1);
+                }
+                p.putUInt("layout", want);
+                syslog("STORE", "telem geloescht");
+            }
+            p.end();
+        }
+    }
 
     if (xSemaphoreTake(s_mtx, pdMS_TO_TICKS(2000)) != pdTRUE) return;
     boot_scan();
