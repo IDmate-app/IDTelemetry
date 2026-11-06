@@ -232,7 +232,7 @@
     <div style="font-size:12px;font-weight:600;margin-bottom:6px" data-i18n="cfg.gps_source">GPS source</div>
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:6px">
       <input type="radio" name="gps_src" id="gps_src_ext" value="ext" style="accent-color:var(--accent)">
-      <span style="font-size:12px" data-i18n-html="cfg.gps_ext">External GNSS (BLITZ Mini M10, UART) &mdash; <em>recommended</em></span>
+      <span style="font-size:12px" data-i18n-html="cfg.gps_ext">External GNSS (u-blox DAN-F10N, L1+L5, UART) &mdash; <em>recommended</em></span>
     </label>
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:6px">
       <input type="radio" name="gps_src" id="gps_src_int" value="int" style="accent-color:var(--accent)">
@@ -243,12 +243,14 @@
       <span style="font-size:12px" data-i18n="cfg.gps_off">Off</span>
     </label>
     <div class="hint" style="margin-bottom:12px" data-i18n="cfg.gps_hint">
-      External M10 is preferred &mdash; it keeps a fix while LTE runs (shared radio limits in SIM7080G internal GNSS).
+      External GNSS is preferred &mdash; it keeps its fix while LTE runs (the internal SIM7080G GNSS shares the radio with LTE).
       Lite variant must use external (no internal GNSS available).
     </div>
-    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+    <!-- Kompass gehoerte zum BLITZ-M10-Board; DAN-F10N hat keinen, Treiber gab es nie.
+         Ausgeblendet statt entfernt: Laden/Speichern der Config greifen auf #mod_compass zu. -->
+    <label style="display:none;align-items:center;gap:10px;cursor:pointer">
       <input type="checkbox" id="mod_compass" style="width:16px;height:16px;accent-color:var(--accent)">
-      <span style="font-size:12px" data-i18n="cfg.compass_label">Compass (QMC5883L on BLITZ M10)</span>
+      <span style="font-size:12px" data-i18n="cfg.compass_label">Compass (QMC5883L, BLITZ M10 only)</span>
     </label>
     <div class="hint" data-i18n="cfg.compass_hint">Compass on I2C Wire0 (GPIO45/21). Disable if not fitted.</div>
   </div>

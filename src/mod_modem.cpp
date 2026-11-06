@@ -893,12 +893,12 @@ static void modem_task(void* /*param*/) {
                     // GPS-Daten abfragen — nur wenn internes GPS aktiv
                     //
                     // ⚠️ FIXES A.5 (latente P2-Falle): Dieser Pfad ist im Produktivbetrieb
-                    // INAKTIV — aktiv ist das externe M10-GPS (mod_gps_ext.cpp), das volle
+                    // INAKTIV — aktiv ist das externe GPS (DAN-F10N, mod_gps_ext.cpp), das volle
                     // Gates hat (0,0-Filter, HDOP/Sat-Gate, Settle-Zeit, Mindestdistanz für
                     // Kurs). Hier fehlt das alles: getGPS() geht ohne 0,0-Filter, ohne
                     // HDOP-/Sat-Gate und ohne Settle-Zeit in gps_update(), und die
                     // Kursberechnung unten hat keine Mindestdistanz → Zufallskurs im Stand.
-                    // BEVOR jemand auf internes GPS umschaltet (oder das M10 ausfällt):
+                    // BEVOR jemand auf internes GPS umschaltet (oder das externe GPS ausfällt):
                     // gleiche Gates wie mod_gps_ext.cpp:170-179 nachrüsten ([FLASH]).
                     float lat = 0, lon = 0, speed = 0, alt = 0, accuracy = 0;
                     int   vsat = 0, usat = 0;

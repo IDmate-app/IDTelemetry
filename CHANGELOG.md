@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.5.1] – 2026-11-06
+
+### Fixed
+
+- **Log download** streams the file in 2 KB pieces straight from the log instead of copying it first: copying a 730 KB log blocked the web server for seconds (watchdog risk). Pages and log previews are sent with `Cache-Control: no-store`, so a browser never shows a page from before the flash.
+- Configuration page named the old GPS module (BLITZ Mini M10); it is the u-blox DAN-F10N (L1+L5) since 1.4.0. The compass switch (BLITZ M10 board only, never had a driver) is hidden.
+
 ## [1.5.0] – 2026-11-06
 
 Replaces the mixed state found on the author's stick (FW_VERSION "1.2.0" + August GPS work, without the 1.3.0/1.4.0 fixes); everything in that image is contained here. The SoE / HVAC / cabin-temperature formulas are still open: until they are filled in, those fields are polled and logged raw but not sent.
