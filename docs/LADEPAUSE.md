@@ -11,7 +11,9 @@ Dauer: etwa 10 Minuten (Lesen des Flash ~4 min).
 - Die **Debug-Seite des Sticks nicht öffnen.** Sie ruft die Logs alle 15–20 s
   ab, und die laufende Firmware leert sie dabei (ROADMAP 1).
 - Optional, nur zum Ansehen: Die Konfig-Seite zeigt die Version klein und grau
-  neben „TS.CONFIG“ (seit März 2026). Steht dort nichts, ist der Stand älter.
+  neben „TS.CONFIG“, sobald `/status` geladen ist. Fehlt sie, kann das am
+  Laden auf dem Handy liegen; über den Stand sagt das nichts. Den bestimmt nur
+  der Vergleich des Images (Schritt 2).
 - PC: Python 3 und esptool (`pip install esptool`).
 
 ## 1. Flash-Abbild lesen (sichert alles)

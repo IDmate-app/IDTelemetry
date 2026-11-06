@@ -49,9 +49,11 @@ Commit-Vergleich über die Texte der Firmware).
    - Zusätzlich, falls einfacher: Stick normal starten, serielles Terminal
      115200 Baud, `syslog` und `elmlog` eingeben (liest nur, löscht nicht).
 
-3. **Version bestimmen:** Erster Blick: Die Weboberfläche zeigt die Version
-   seit 19.03.2026 (Commit `75959eb`) klein und grau neben „TS.DEBUG“. Fehlt sie
-   wirklich, ist der Stand älter. Das Kompilierdatum in `esp_app_desc_t` taugt
+3. **Version bestimmen:** Gesichert ist nur: Der Stand ist **nach August 2026**
+   (L1+L5-GPS seit August). Dass die Weboberfläche keine Version zeigt, sagt
+   nichts über das Alter (die Anzeige erscheint erst, wenn `/status` geladen
+   ist; Ladeproblem am Handy möglich). **Kein Code wird auf einen vermuteten
+   Stand hin geändert** — erst der Vergleich des Images. Das Kompilierdatum in `esp_app_desc_t` taugt
    bei Arduino nicht (stammt aus der vorgebauten Bibliothek). Entscheidend
    sind die Log-Texte im Image: `stick_dump.py --repo` vergleicht sie mit
    allen Commits; Log-Texte und `FW_VERSION`-String → welcher Stand (z. B. „Baudrate erkannt“ = GPS-Fix vom
