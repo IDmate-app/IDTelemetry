@@ -223,3 +223,46 @@ eigener Commit:**
 Minuten und lädt nach, ohne Neustart. Test: Start im Funkloch (Tiefgarage),
 dann ins Netz fahren.
 
+
+---
+
+## 6. Idee: Ladevorgang passiv mitlesen (nur zuhören, nie senden)
+
+**Ausgangslage:** Beim Laden liest der Stick heute nichts. Er stellt bei
+ausgeschaltetem Auto keine Anfragen, weil Senden auf den schlafenden Bus den
+VW-Alarm auslösen kann. Ladekurven fehlen deshalb in IDmate.
+
+**Idee:** Nicht sprechen, nur lauschen. Im TWAI-Modus `LISTEN_ONLY` sendet der
+CAN-Controller nichts, auch keine ACK-Bits; er ist elektrisch stumm und kann
+weder den Bus wecken noch einen BUS_OFF auslösen. (Im Normalmodus bestätigt
+der Controller jeden Rahmen mit ACK — das ist bereits Senden.)
+
+**Versuch 1 — Lesen bei externer Spannung (Laden, Auto steht):**
+- Stick während des Ladens per USB am Laptop, serielles Terminal 115200 Baud.
+- `can listen 60` (seit 1.4.0 im Code; ob die Stick-Firmware den Befehl hat,
+  zeigt erst der Firmware-Abgleich, Punkt 0) → Zahl der Rahmen und Kennungen.
+- Ergebnis notieren: kommt überhaupt Verkehr am OBD-Port an? Beim MEB sitzt
+  der OBD-Port hinter dem Gateway; es kann sein, dass dort ohne Anfrage
+  **gar nichts** zu hören ist. Dann ist die Idee am OBD-Port erledigt.
+- Kommen Rahmen: Kennungen mit Häufigkeit und Beispiel-Bytes ins Syslog
+  (heute zeigt der Befehl nur die ersten 8 Kennungen ohne Daten → erweitern:
+  Histogramm aller Kennungen, je 3 Beispiel-Rahmen).
+
+**Versuch 2 — Lesen ohne externe Spannung (niemand im Auto):**
+- Nur wenn Versuch 1 Verkehr zeigt.
+- Gleicher Befehl, ausschließlich `LISTEN_ONLY`, keine Telemetrie-Abfragen,
+  kein ELM/ABRP-Verkehr in dieser Zeit.
+- Prüfen: Alarm bleibt ruhig, Auto schläft normal ein, 12-V-Verbrauch des
+  Sticks über die Ladezeit (Stick bleibt dafür wach statt Deep Sleep).
+
+**Wenn beides klappt — Ladevorgang tracken:**
+- Neuer Zustand „Laden passiv“: Auto aus + Bus aktiv → CAN in `LISTEN_ONLY`,
+  Telemetrie-Poller und ELM-Fallback gesperrt (harte Sperre im Code, nicht nur
+  Konfiguration).
+- Aus den mitgehörten Rahmen Spannung, Strom, SoC und Leistung dekodieren
+  (Kennungen erst aus Versuch 1 bestimmen), als normale Telemetrie-Zeilen
+  puffern und senden → Ladekurve in IDmate.
+- Abbruch: kein Verkehr mehr für N Minuten → Deep Sleep wie bisher.
+
+**Grundsatz:** Kein Schritt, der sendet, solange das Auto aus ist. Jeder
+Versuch zuerst mit Laptop und Terminal, erst danach in die Firmware.
