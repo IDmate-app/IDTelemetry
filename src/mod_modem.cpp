@@ -38,6 +38,27 @@ static TinyGsm         s_modem(s_serial);
 RTC_DATA_ATTR static uint8_t  s_wd_reboot_count       = 0;
 RTC_DATA_ATTR static uint32_t s_wd_first_reboot_epoch = 0;
 
+// 1.6.4: Modem-Wiederanlauf. Log 2026-11-06: nach einem Abriss meldete das
+// Modem 13 min lang RegStatus=0 ("nicht angemeldet, sucht nicht"), die
+// Netzsuche wartete nur (60 s, 5 min, 15 min). Erst ein Neustart des Sticks
+// brachte in 1 s Netz. Jetzt: Funk aus/ein, kurze Pausen bei Spannung, und
+// als letztes Mittel ein Neustart.
+static uint32_t s_reg0_since_ms   = 0;   // seit wann RegStatus=0 (0 = nicht)
+static uint32_t s_no_net_since_ms = 0;   // seit wann ohne Netz in der Suche
+RTC_DATA_ATTR static uint8_t s_nonet_reboots = 0;  // Neustarts ohne Netz in Folge
+#define REG0_RADIO_RESTART_MS   120000UL  // 2 min "sucht nicht" → CFUN=0/1
+#define NONET_REBOOT_MS         600000UL  // 10 min ohne Netz mit Spannung → Neustart
+#define NONET_REBOOT_MAX        2         // hoechstens 2 Neustarts in Folge
+#define NONET_BACKOFF_VBUS_MS   60000UL   // mit Spannung hoechstens 60 s warten
+
+static void note_reg(RegStatus r) {
+    if (r == REG_UNREGISTERED) {
+        if (s_reg0_since_ms == 0) s_reg0_since_ms = millis() ? millis() : 1;
+    } else if (r != REG_NO_RESULT) {
+        s_reg0_since_ms = 0;   // sucht, verweigert oder angemeldet
+    }
+}
+
 // ---- Zustand ----------------------------------------------
 
 static volatile bool     s_connected   = false;
@@ -309,6 +330,7 @@ static RegStatus wait_for_reg(uint32_t wait_s) {
 
     for (uint32_t s = 0; s < wait_s && !g_shutdown; s++) {
         reg_s = s_modem.getRegistrationStatus();
+        note_reg(reg_s);
         if (reg_s == REG_OK_HOME || reg_s == REG_OK_ROAMING) return reg_s;
 
         // RegStatus=3 (denied): Netz lehnt SIM ab → nach 10s abbrechen
@@ -691,6 +713,32 @@ static bool try_register(char* operator_out, size_t op_size) {
 
 
 
+// 1.6.4: Funk aus und wieder ein (kein PWRKEY — der war in frueheren Logs
+// schaedlich). Danach Radio-Einstellungen neu, denn CFUN=0/1 setzt CNMP/CMNB
+// zurueck (siehe Baender-Umschaltung).
+static void radio_restart() {
+    syslog("MODEM", "Modem sucht nicht (RegStatus=0, 2 min) · Funk aus/ein (CFUN=0/1)");
+    at_ok("+CFUN=0", 10000L);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    at_ok("+CFUN=1", 10000L);
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    if (!ensure_sim_ready()) syslog("MODEM", "SIM nach Funk aus/ein nicht READY");
+    configure_radio();
+    s_connected     = false;
+    s_reg0_since_ms = 0;
+}
+
+// Neustart wie die Eskalationsstufe 4: geordnet, damit kein Schreibvorgang
+// abreisst. Die Zeilen liegen im Flash-Ringpuffer und gehen danach raus.
+static void soft_reboot(const char* why) {
+    syslog("MODEM", why);
+    Serial.flush();
+    g_shutdown = true;
+    if (spiffs_lock(2000)) spiffs_unlock();
+    delay(200);
+    esp_restart();
+}
+
 static void modem_task(void* /*param*/) {
 
     #ifdef LTE_DISABLED
@@ -815,6 +863,9 @@ static void modem_task(void* /*param*/) {
                     if (registered) {
                         s_sig_quality = (int8_t)s_modem.getSignalQuality();
                         scan_fail_count = 0;
+                        s_no_net_since_ms = 0;
+                        s_reg0_since_ms   = 0;
+                        s_nonet_reboots   = 0;
 
                         int8_t bars = (s_sig_quality >= 20) ? 5 : (s_sig_quality >= 15) ? 4 : (s_sig_quality >= 10) ? 3 : (s_sig_quality >= 5) ? 2 : 1;
                         snprintf(syslog_msg, sizeof(syslog_msg), "Netz verbunden · %s · %d/5 Balken · CSQ %d", s_operator, bars, s_sig_quality);
@@ -837,12 +888,39 @@ static void modem_task(void* /*param*/) {
                         stat_interval = 5000;
                     } else {
                         scan_fail_count++;
+                        uint32_t t_now = millis();
+                        if (s_no_net_since_ms == 0) s_no_net_since_ms = t_now ? t_now : 1;
+                        bool vbus = pmu_is_vbus_in();
+
+                        // 1.6.4 (1): Modem meldet seit 2 min "sucht nicht" → Funk aus/ein.
+                        if (s_reg0_since_ms != 0 && t_now - s_reg0_since_ms >= REG0_RADIO_RESTART_MS) {
+                            radio_restart();
+                            vTaskDelay(pdMS_TO_TICKS(5000));
+                            continue;
+                        }
+
+                        // 1.6.4 (3): 10 min ohne Netz bei Spannung → Neustart, wie das
+                        // Web-Update am 2026-11-06, nach dem das Netz in 1 s da war.
+                        // Hoechstens 2x in Folge (echtes Funkloch, Tiefgarage).
+                        if (vbus && t_now - s_no_net_since_ms >= NONET_REBOOT_MS
+                                 && s_nonet_reboots < NONET_REBOOT_MAX) {
+                            s_nonet_reboots++;
+                            char m[96];
+                            snprintf(m, sizeof(m), "10 min ohne Netz mit Spannung · Neustart %u/%u (%u Rows im Puffer)",
+                                     (unsigned)s_nonet_reboots, (unsigned)NONET_REBOOT_MAX,
+                                     (unsigned)telem_get_row_pending());
+                            soft_reboot(m);
+                        }
+
                         // FIXES B.12: exponentieller Backoff statt fix 60 s
                         // (scan_fail_count wurde gezählt, aber nie genutzt) —
                         // 60 s → 5 min → 15 min (gedeckelt). Bricht den Dauerscan
                         // in Funkloch-Lage mit VBUS.
+                        // 1.6.4 (2): mit Spannung (Auto an / laedt) hoechstens 60 s —
+                        // die lange Pause schont nur den Akku, und den braucht es dann nicht.
                         uint32_t backoff_ms = (scan_fail_count <= 1) ? 60000UL :
                                               (scan_fail_count == 2) ? 300000UL : 900000UL;
+                        if (vbus && backoff_ms > NONET_BACKOFF_VBUS_MS) backoff_ms = NONET_BACKOFF_VBUS_MS;
                         snprintf(syslog_msg, sizeof(syslog_msg),
                                  "Kein Operator erreichbar (Versuch %d) · warte %lus",
                                  scan_fail_count, (unsigned long)(backoff_ms / 1000UL));
@@ -856,6 +934,8 @@ static void modem_task(void* /*param*/) {
                             vTaskDelay(pdMS_TO_TICKS(1000));
                             if ((w / 1000) % 15 != 14) continue;
                             RegStatus r = s_modem.getRegistrationStatus();
+                            note_reg(r);
+                            if (s_reg0_since_ms != 0 && millis() - s_reg0_since_ms >= REG0_RADIO_RESTART_MS) break;
                             if (r != REG_OK_HOME && r != REG_OK_ROAMING) continue;
                             char plmn[8] = "";
                             get_current_plmn(plmn, sizeof(plmn));
@@ -1886,6 +1966,7 @@ void modem_lte_bands_fix(bool all) {
 void modem_clear_reboot_count() {
     s_wd_reboot_count       = 0;
     s_wd_first_reboot_epoch = 0;
+    s_nonet_reboots         = 0;
 }
 
 void modem_pause_task() {

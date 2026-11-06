@@ -3,6 +3,15 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.4] – 2026-11-06
+
+### Fixed
+
+- **Long silence after losing the network on the road**: after a drop the modem reported "not registered, not searching" (`RegStatus=0`) for 13 minutes while the network search only waited (60 s, 5 min, then 15 min each); only a restart of the stick brought the network back, within a second. Now:
+  - the modem reports "not searching" for 2 minutes → radio off and on (`CFUN=0/1`, settings re-applied; no PWRKEY pulse);
+  - with OBD power (car on or charging) the search waits at most 60 s between attempts; without power the long pauses stay to save the battery;
+  - 10 minutes without network with OBD power → orderly restart of the stick, at most twice in a row (a real dead spot, e.g. an underground car park, does not cause a reboot loop). The counter resets once the network is back or the stick goes to sleep.
+
 ## [1.6.3] – 2026-11-06
 
 ### Added
