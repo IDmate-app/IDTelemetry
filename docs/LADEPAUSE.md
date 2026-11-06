@@ -65,11 +65,10 @@ Ergebnis in `stick_full_2026-11-06_teile/`:
 Skript schneidet die Syslog-Zeilen als Notlösung heraus.
 
 Für den Abgleich reichen `app0.bin`, `app_info.txt`, `telem.txt` und die beiden
-Logs. Das Skript vergleicht die Texte der Firmware mit allen Commits. Ein normaler
-`git clone` reicht: die Historie vor dem öffentlichen Start steckt in den
-Branches `phase-b` und `gps/ubx-ack-baud-autodetect`. Kleinste „Abweichung“ =
-der Stand auf dem Stick; den Rest (Code hinter Feature-Schaltern) gleiche ich
-in der Sitzung ab.
+Logs. Das Skript vergleicht die Texte der Firmware mit allen Commits. Die Historie
+vor dem öffentlichen Start ist auf GitHub nicht mehr vorhanden; den Vergleich
+mit ihr mache ich in der Sitzung. Dafür `app0.bin` und `app_info.txt` (oder das
+ganze `_teile`-Verzeichnis) in die Sitzung geben, nicht ins Repo.
 
 ## 3. Stick zurück ins Auto
 
