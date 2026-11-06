@@ -2,6 +2,13 @@
 
 Stand: 2026-11-06, Firmware auf GitHub: 1.4.0 (`main`).
 
+**Vorbereitet auf Branch `next-1.5` (nicht geflasht, nicht released):** Punkt 1
+(Log-Fix), 0.6 (Build-Kennung), 2 bis auf die Formeln (Felder, Payload-Bits
+20–22, Info-Telegramm, eigenes Polling von 0x0364/0x2613 mit Rohbytes).
+IDmate liest das alles seit 1.2.255. Offen: Formeln in `decode_new_did()`
+(`src/mod_telemetry.cpp`) und Punkt 5. Erst nach dem Firmware-Abgleich (0)
+flashen.
+
 Reihenfolge: erst **0** (wissen, was auf dem Stick läuft), dann **1** (Logs
 abrufbar) und **5** (Funkloch-Hänger), dann **2–4** (neue Werte). Ohne 0 und 1
 lässt sich 2 nicht entschlüsseln.
@@ -39,7 +46,9 @@ stabil).
    - Zusätzlich, falls einfacher: Stick normal starten, serielles Terminal
      115200 Baud, `syslog` und `elmlog` eingeben (liest nur, löscht nicht).
 
-3. **Version bestimmen:** Im App-Image steht die ESP-IDF-Beschreibung
+3. **Version bestimmen:** Erster Blick: Die Weboberfläche zeigt die Version
+   seit 19.03.2026 (Commit `75959eb`) klein und grau neben „TS.DEBUG“. Fehlt sie
+   wirklich, ist der Stand älter. Dann im Image: Im App-Image steht die ESP-IDF-Beschreibung
    (`esp_app_desc_t`: Kompilierdatum/-zeit, IDF-Version) und alle Log-Texte der
    Firmware. Kompilierdatum → welche Commits es damals gab; Log-Texte und
    `FW_VERSION`-String → welcher Stand (z. B. „Baudrate erkannt“ = GPS-Fix vom

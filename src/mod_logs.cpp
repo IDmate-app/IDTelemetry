@@ -1,4 +1,5 @@
 #include "mod_logs.h"
+#include "config.h"
 #include "mod_config.h"
 #include "mod_rtc.h"
 #include <ArduinoJson.h>
@@ -109,6 +110,9 @@ void logs_init() {
     char msg[64];
     snprintf(msg, sizeof(msg), "Neustart  Grund: %s", rstr);
     syslog("BOOT", msg);
+    char fw[96];
+    snprintf(fw, sizeof(fw), "Firmware %s  Build %s  (%s)", FW_VERSION, FW_BUILD, FW_VARIANT);
+    syslog("BOOT", fw);
 }
 
 // ============================================================

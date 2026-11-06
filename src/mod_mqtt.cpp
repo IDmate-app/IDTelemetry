@@ -131,6 +131,8 @@ static bool mqtt_smconn(uint32_t hard_timeout_ms = 20000UL) {
     return false;  // Hard-Timeout
 }
 
+static void mqtt_publish_info();
+
 bool mqtt_connect() {
     if (!s_configured) mqtt_configure();
 
@@ -154,6 +156,7 @@ bool mqtt_connect() {
         syslog("MQTT", msg);
     }
 
+    mqtt_publish_info();
     return true;
 }
 
@@ -194,20 +197,14 @@ bool mqtt_is_connected() {
 // put_*, build_binary, encrypt_payload moved to mod_payload.cpp.
 
 // ---- Publish einer Zeile ----
-bool mqtt_publish_row(const TelemetryRow& row) {
-    if (!s_connected) return false;
-
+// AT+SMPUB mit Binaer-Payload auf <topic-prefix>/data. 0 = OK, 1 = kein
+// ">"-Prompt, 2 = kein OK/PUBACK. Setzt keinen Verbindungsstatus.
+static int mqtt_smpub(const uint8_t* payload, int plen, char* topic, int topic_size,
+                      String& resp) {
     TinyGsm& m = modem_get();
     HardwareSerial& ser = modem_serial();
 
-    // Binär packen + AES verschlüsseln (shared mit WiFi-Upload via mod_payload)
-    static uint8_t payload[192];   // 1 + 16 + max 128 padded
-    int plen = payload_encode(row, payload, sizeof(payload));
-    if (plen <= 0) return false;
-
-    // Topic
-    char topic[80];
-    snprintf(topic, sizeof(topic), "%s/data", cfg_mqtt_topic());
+    snprintf(topic, topic_size, "%s/data", cfg_mqtt_topic());
 
     // AT+SMPUB="topic",len,qos,retain
     char cmd[128];
@@ -215,22 +212,54 @@ bool mqtt_publish_row(const TelemetryRow& row) {
     m.sendAT(cmd);
 
     // Warte auf ">" Prompt
-    String resp = "";
-    int rc = m.waitResponse(5000L, resp, ">", "ERROR");
-    if (rc != 1) {
-        syslog("MQTT", "SMPUB: kein > Prompt");
-        s_connected = false;
-        s_last_pub_ok = false;
-        return false;
-    }
+    resp = "";
+    if (m.waitResponse(5000L, resp, ">", "ERROR") != 1) return 1;
 
     // Payload senden
     ser.write(payload, plen);
 
     // Warte auf OK (Broker PUBACK bei QoS 1)
     resp = "";
-    rc = m.waitResponse(MQTT_PUBLISH_TIMEOUT_MS, resp);
-    if (rc != 1) {
+    if (m.waitResponse(MQTT_PUBLISH_TIMEOUT_MS, resp) != 1) return 2;
+    return 0;
+}
+
+// Info-Telegramm (Firmware, Build-Kennung, Telegramm-Format) — einmal pro
+// Verbindung. Fehlschlag wird nur geloggt: die Werte-Telegramme haben Vorrang.
+static void mqtt_publish_info() {
+    static uint8_t payload[160];
+    int plen = payload_encode_info(payload, sizeof(payload));
+    if (plen <= 0) return;
+    char topic[80];
+    String resp;
+    int rc = mqtt_smpub(payload, plen, topic, sizeof(topic), resp);
+    if (rc == 0) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "Info gesendet: %s %s", FW_VERSION, FW_BUILD);
+        syslog("MQTT", msg);
+    } else {
+        syslog("MQTT", rc == 1 ? "Info: kein > Prompt" : "Info: kein PUBACK");
+    }
+}
+
+bool mqtt_publish_row(const TelemetryRow& row) {
+    if (!s_connected) return false;
+
+    // Binär packen + AES verschlüsseln (shared mit WiFi-Upload via mod_payload)
+    static uint8_t payload[192];   // 1 + 16 + max 128 padded
+    int plen = payload_encode(row, payload, sizeof(payload));
+    if (plen <= 0) return false;
+
+    char topic[80];
+    String resp;
+    int rc = mqtt_smpub(payload, plen, topic, sizeof(topic), resp);
+    if (rc == 1) {
+        syslog("MQTT", "SMPUB: kein > Prompt");
+        s_connected = false;
+        s_last_pub_ok = false;
+        return false;
+    }
+    if (rc == 2) {
         resp.trim();
         char msg[128];
         snprintf(msg, sizeof(msg), "Publish fehlgeschlagen: %s", resp.c_str());

@@ -112,6 +112,9 @@ static const uint32_t s_max_age_ms[TELEM_FIELD_COUNT] = {
     90000,   // IS_PARKED    (30s poll)
     180000,  // ODOMETER     (60s poll)
     180000,  // BATT_DEVICE  (60s sensor)
+    90000,   // SOE          (30s poll)
+    90000,   // HVAC_KW      (30s poll)
+    90000,   // CABIN_TEMP   (30s poll)
 };
 
 // Mindest-Änderung damit ein Wert gesendet wird (0 = bei jeder Änderung)
@@ -138,6 +141,9 @@ static const float s_min_delta[TELEM_FIELD_COUNT] = {
     0.0f,    // IS_PARKED (bool)
     0.5f,    // ODOMETER (km)
     0.0f,    // BATT_DEVICE (int %)
+    0.1f,    // SOE (kWh)
+    0.1f,    // HVAC_KW (kW)
+    0.5f,    // CABIN_TEMP (°C)
 };
 
 // ── Geo-Hilfsfunktionen ──────────────────────────────────────
@@ -364,6 +370,109 @@ struct CanQuerySlot {
     uint32_t last_ms;
 };
 
+// ── DIDs mit noch offener Formel (ROADMAP 2) ─────────────────
+// ABRP fragt 0x0364 (ECU FC0076) und 0x2613 (ECU 746). Was genau drinsteht,
+// ist noch nicht entschluesselt. Bis dahin: Rohbytes cachen (ABRP wird daraus
+// beantwortet), alle 5 min ins Syslog, in /status und per Serial "rawdid".
+// Formel gefunden → unten in decode_new_did() eintragen, fertig: Feld,
+// Payload-Bit (20-22) und IDmate sind schon vorbereitet.
+struct RawDid {
+    uint32_t req_id;
+    uint16_t did;
+    uint8_t  len;
+    uint8_t  data[32];
+    uint32_t ms;        // millis() der Antwort, 0 = nie
+    uint32_t log_ms;    // letzter Syslog-Eintrag
+};
+static RawDid s_raw_did[] = {
+    { 0, 0x0364, 0, {}, 0, 0 },
+    { 0, 0x2613, 0, {}, 0, 0 },
+};
+static constexpr int RAW_DID_COUNT = sizeof(s_raw_did) / sizeof(s_raw_did[0]);
+static portMUX_TYPE s_raw_mux = portMUX_INITIALIZER_UNLOCKED;
+static constexpr uint32_t RAW_DID_LOG_MS = 300000;
+
+static void decode_new_did(uint16_t did, const uint8_t* d, int n);
+
+static void raw_did_store(uint32_t req_id, uint16_t did, const uint8_t* d, int n) {
+    if (!d || n <= 0) return;
+    for (int i = 0; i < RAW_DID_COUNT; i++) {
+        if (s_raw_did[i].did != did) continue;
+        if (n > (int)sizeof(s_raw_did[i].data)) n = sizeof(s_raw_did[i].data);
+        uint32_t now = millis();
+        bool log_now;
+        portENTER_CRITICAL(&s_raw_mux);
+        s_raw_did[i].req_id = req_id;
+        memcpy(s_raw_did[i].data, d, n);
+        s_raw_did[i].len = (uint8_t)n;
+        s_raw_did[i].ms  = now ? now : 1;
+        log_now = (s_raw_did[i].log_ms == 0) || (now - s_raw_did[i].log_ms >= RAW_DID_LOG_MS);
+        if (log_now) s_raw_did[i].log_ms = now ? now : 1;
+        portEXIT_CRITICAL(&s_raw_mux);
+        if (log_now) {
+            char m[128];
+            int p = snprintf(m, sizeof(m), "DID 0x%04X @%08lX (%d B):", did, (unsigned long)req_id, n);
+            for (int k = 0; k < n && p < (int)sizeof(m) - 4; k++)
+                p += snprintf(m + p, sizeof(m) - p, " %02X", d[k]);
+            syslog("RAWDID", m);
+        }
+        decode_new_did(did, d, n);
+        return;
+    }
+}
+
+bool telem_get_raw_did(uint32_t req_id, uint16_t did, uint8_t* out, int max_out,
+                       int* out_len, uint32_t* out_age_ms) {
+    for (int i = 0; i < RAW_DID_COUNT; i++) {
+        if (s_raw_did[i].did != did) continue;
+        bool ok = false;
+        portENTER_CRITICAL(&s_raw_mux);
+        if (s_raw_did[i].ms != 0 && (req_id == 0 || s_raw_did[i].req_id == req_id)) {
+            int n = s_raw_did[i].len < max_out ? s_raw_did[i].len : max_out;
+            memcpy(out, s_raw_did[i].data, n);
+            if (out_len)    *out_len = n;
+            if (out_age_ms) *out_age_ms = millis() - s_raw_did[i].ms;
+            ok = true;
+        }
+        portEXIT_CRITICAL(&s_raw_mux);
+        return ok;
+    }
+    return false;
+}
+
+void telem_raw_did_str(char* buf, int size) {
+    int p = 0;
+    buf[0] = 0;
+    for (int i = 0; i < RAW_DID_COUNT && p < size - 8; i++) {
+        uint8_t d[32]; int n = 0; uint32_t age = 0;
+        if (!telem_get_raw_did(0, s_raw_did[i].did, d, sizeof(d), &n, &age)) {
+            p += snprintf(buf + p, size - p, "%s%04X=-", i ? "; " : "", s_raw_did[i].did);
+            continue;
+        }
+        p += snprintf(buf + p, size - p, "%s%04X=", i ? "; " : "", s_raw_did[i].did);
+        for (int k = 0; k < n && p < size - 4; k++)
+            p += snprintf(buf + p, size - p, "%s%02X", k ? " " : "", d[k]);
+        if (p < size - 12) p += snprintf(buf + p, size - p, " (%lus)", (unsigned long)(age / 1000));
+    }
+}
+
+// Formeln fuer die neuen Felder. A = d[0], B = d[1], ... (ohne 62 + DID).
+// TODO (Ladepause): aus ELM-Log/Syslog-Rohbytes + ABRP-Screenshot ableiten.
+// Vorlage (Beispiel, NICHT verifiziert):
+//   float v = ((d[0] << 8) | d[1]) / 10.f;  // A:B / 10 → kWh
+//   telem_update(TELEM_SOE, v, plausible(v, 0.f, 120.f));
+static void decode_new_did(uint16_t did, const uint8_t* d, int n) {
+    (void)d; (void)n;
+    switch (did) {
+        case 0x0364:  // SoE (kWh)             → TELEM_SOE,        plausible 0 … 120
+            break;
+        case 0x2613:  // Innentemp. (°C) / Klima (kW) → TELEM_CABIN_TEMP -40 … 80,
+            break;    //                            TELEM_HVAC_KW    -1 … 15
+        default:
+            break;
+    }
+}
+
 // Dekodierung: DID-Rohdaten → Telemetrie-Cache
 static void decode_did_response(uint16_t did, const uint8_t* d, int n) {
     switch (did) {
@@ -456,7 +565,7 @@ static void decode_did_response(uint16_t did, const uint8_t* d, int n) {
     }
 }
 
-// Scheduler-Tabelle: 12 CAN-DIDs, gestaffelt abgefragt.
+// Scheduler-Tabelle: 14 CAN-DIDs, gestaffelt abgefragt.
 // Reihenfolge bestimmt Startversatz (1s pro Eintrag beim Boot).
 static CanQuerySlot s_can_schedule[] = {
     // ── Schnell (5s): Spannung, Strom, Speed ──
@@ -475,6 +584,9 @@ static CanQuerySlot s_can_schedule[] = {
     { ECU_710_REQ,    ECU_710_RESP,    0x2AB2, 60000, 0 },    // [9]  Kapazität
     { ECU_FC007B_REQ, ECU_FC007B_RESP, 0x1E32, 60000, 0 },   // [10] kWh geladen
     { ECU_FC007B_REQ, ECU_FC007B_RESP, 0x7448, 60000, 0 },   // [11] Ladestatus
+    // ── 1.5.0 (ROADMAP 2): fragt ABRP ohnehin; Formel noch offen → Rohbytes ──
+    { ECU_FC0076_REQ, ECU_FC0076_RESP, 0x0364, 30000, 0 },   // [12] SoE (Vermutung)
+    { ECU_746_REQ,    ECU_746_RESP,    0x2613, 30000, 0 },   // [13] Klima/Innen (Vermutung)
 };
 static constexpr int CAN_SCHEDULE_COUNT = sizeof(s_can_schedule) / sizeof(s_can_schedule[0]);
 
@@ -518,6 +630,7 @@ static void telem_task(void* /*param*/) {
                                   s_can_schedule[best].did,
                                   d, sizeof(d));
                 decode_did_response(s_can_schedule[best].did, d, n);
+                if (n > 0) raw_did_store(s_can_schedule[best].req_id, s_can_schedule[best].did, d, n);
                 s_can_schedule[best].last_ms = now;
             }
         }
@@ -745,6 +858,12 @@ const char* telem_preview_rows(int max_rows) {
             pos += snprintf(buf + pos, sizeof(buf) - pos, "LTE=%ddBm ", (int)row.values[TELEM_LTE_SIGNAL]);
         if (row.valid[TELEM_BATT_DEVICE])
             pos += snprintf(buf + pos, sizeof(buf) - pos, "BD=%d%% ", (int)row.values[TELEM_BATT_DEVICE]);
+        if (row.valid[TELEM_SOE])
+            pos += snprintf(buf + pos, sizeof(buf) - pos, "SOE=%.1f ", row.values[TELEM_SOE]);
+        if (row.valid[TELEM_HVAC_KW])
+            pos += snprintf(buf + pos, sizeof(buf) - pos, "HK=%.2f ", row.values[TELEM_HVAC_KW]);
+        if (row.valid[TELEM_CABIN_TEMP])
+            pos += snprintf(buf + pos, sizeof(buf) - pos, "CT=%.0f ", row.values[TELEM_CABIN_TEMP]);
 
         if (pos < (int)sizeof(buf) - 2) buf[pos++] = '\n';
     }
@@ -819,7 +938,8 @@ void telem_ack_row() {
 
 #define TELEM_ROWS_FILE     "/telem_rows.bin"
 #define TELEM_PERSIST_MAGIC 0x544C4D03UL  // 'TLM' + Version 3 (ohne eq_mask/na_mask)
-#define TELEM_ROWS_MAGIC    0x544C5202UL  // 'TLR' + Version 2 (ohne eq_mask/na_mask)
+// 'TLR' + Feldanzahl: TelemetryRow-Groesse haengt daran, alte Datei wird verworfen
+#define TELEM_ROWS_MAGIC    (0x544C5200UL | (uint32_t)TELEM_FIELD_COUNT)
 
 struct PersistHeader {
     uint32_t magic;
@@ -1012,8 +1132,9 @@ void telem_restore_from_spiffs() {
 //  ELM327-Brücke: ABRP CAN-Antwort → Telemetrie-Cache
 //  data[] = UDS-Datenbytes NACH 0x62+DID_H+DID_L
 // ============================================================
-void telem_feed_did(uint16_t did, const uint8_t* data, int data_len) {
+void telem_feed_did(uint16_t did, const uint8_t* data, int data_len, uint32_t req_id) {
     if (!data || data_len < 1) return;
+    raw_did_store(req_id, did, data, data_len);   // nur 0x0364 / 0x2613, sonst no-op
 
     switch (did) {
         case 0x028C:  // SoC

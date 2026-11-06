@@ -190,8 +190,8 @@ void setup() {
     Serial.setTxTimeoutMs(0);
     Serial.begin(115200);
     delay(100);
-    Serial.printf("\n=== Telemetry Stick v%s · CAN TX%d/RX%d %dkbps · I2C SDA%d/SCL%d ===\n",
-                  FW_VERSION, CAN_TX_PIN, CAN_RX_PIN, CAN_SPEED_KBPS, RTC_SDA_PIN, RTC_SCL_PIN);
+    Serial.printf("\n=== Telemetry Stick v%s (%s, %s) · CAN TX%d/RX%d %dkbps · I2C SDA%d/SCL%d ===\n",
+                  FW_VERSION, FW_BUILD, FW_VARIANT, CAN_TX_PIN, CAN_RX_PIN, CAN_SPEED_KBPS, RTC_SDA_PIN, RTC_SCL_PIN);
 
     logMutex = xSemaphoreCreateMutex();
 
@@ -392,8 +392,13 @@ void loop() {
                     } else {
                         Serial.println("[CMD] SPIFFS busy");
                     }
+                } else if (strcmp(serial_buf, "rawdid") == 0) {
+                    char raw[192]; telem_raw_did_str(raw, sizeof(raw));
+                    Serial.printf("[CMD] Rohbytes: %s\n", raw);
+                } else if (strcmp(serial_buf, "version") == 0) {
+                    Serial.printf("[CMD] Firmware %s  Build %s  (%s)\n", FW_VERSION, FW_BUILD, FW_VARIANT);
                 } else if (strcmp(serial_buf, "help") == 0) {
-                    Serial.println("Befehle: sleep, nosleep, gps, lte, lte scan, mqtt, mqtt drop, can sniff, reset");
+                    Serial.println("Befehle: sleep, nosleep, gps, lte, lte scan, mqtt, mqtt drop, can sniff, reset, version, rawdid");
                     Serial.println("  LTE:   lte bands, lte bands fix, lte bands all");
                     Serial.println("  Gyro:  gyro cal  (Kalibrierung — Board muss still liegen)");
                     Serial.println("  Debug: at +KOMMANDO  (roher AT-Befehl an Modem)");

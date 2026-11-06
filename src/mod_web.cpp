@@ -215,6 +215,12 @@ void web_init() {
     server.on("/status", HTTP_GET, [](AsyncWebServerRequest* r) {
         JsonDocument doc;
         doc["fw_version"]  = FW_VERSION;
+        doc["fw_build"]    = FW_BUILD;
+        doc["fw_variant"]  = FW_VARIANT;
+        {   // Rohbytes der noch nicht entschluesselten DIDs (ROADMAP 2)
+            char raw[192]; telem_raw_did_str(raw, sizeof(raw));
+            doc["raw_dids"] = raw;
+        }
         doc["uptime"]      = millis();
         doc["can_ok"]      = can_hw_ok();
         doc["log_cnt"]     = log_count;
@@ -457,6 +463,9 @@ void ble_web_routes_init() {
         addField("odometer",      TELEM_ODOMETER);
         addField("range",         TELEM_RANGE);
         addField("batt_device",   TELEM_BATT_DEVICE);
+        addField("soe",           TELEM_SOE);
+        addField("hvac_kw",       TELEM_HVAC_KW);
+        addField("cabin_temp",    TELEM_CABIN_TEMP);
 
         // lte_operator: string-Feld
         {
@@ -577,16 +586,66 @@ void ble_web_routes_init() {
     });
 
     // Logs koennen gross werden (bis 1MB) — nicht in Heap laden.
-    // Snapshot via Rename: andere Tasks schreiben dann auf neue Datei,
-    // Async-Read der Snapshot-Datei kollidiert nicht mehr mit Writern.
+    // Snapshot per KOPIE (nicht Rename): das Original bleibt erhalten, ein
+    // Abruf leert das Log nicht mehr (ROADMAP 1). Kopiert wird in Bloecken
+    // unter spiffs_lock, wie es spiffs_append_ring beim Kuerzen auch tut.
     auto snapshot_and_send = [](AsyncWebServerRequest* r, const char* path, const char* snap) {
-        if (!spiffs_lock(1000)) { r->send(503, "text/plain", "busy"); return; }
+        if (!spiffs_lock(3000)) { r->send(503, "text/plain", "busy"); return; }
         if (SPIFFS.exists(snap)) SPIFFS.remove(snap);
-        bool have = SPIFFS.exists(path) && SPIFFS.rename(path, snap);
+        bool have = false;
+        File src = SPIFFS.open(path, "r");
+        if (src) {
+            File dst = SPIFFS.open(snap, "w");
+            if (dst) {
+                uint8_t buf[1024];
+                while (src.available()) {
+                    int n = src.read(buf, sizeof(buf));
+                    if (n <= 0) break;
+                    dst.write(buf, n);
+                }
+                have = dst.size() > 0;
+                dst.close();
+            }
+            src.close();
+        }
         spiffs_unlock();
         if (!have) { r->send(200, "text/plain", "# leer\n"); return; }
-        r->send(SPIFFS, snap, "text/plain");
+        r->send(SPIFFS, snap, "text/plain", true);
     };
+
+    // Vorschau der Debug-Seite: nur das Dateiende lesen (?n=Bytes, max 16 KB),
+    // ohne Snapshot, ohne Umbenennen. Erste angefangene Zeile wird verworfen.
+    auto tail_send = [](AsyncWebServerRequest* r, const char* path) {
+        size_t want = 8192;
+        if (r->hasParam("n")) want = (size_t)r->getParam("n")->value().toInt();
+        if (want < 512) want = 512;
+        if (want > 16384) want = 16384;
+        String out;
+        if (!spiffs_lock(500)) { r->send(503, "text/plain", "busy"); return; }
+        File f = SPIFFS.open(path, "r");
+        if (f) {
+            size_t sz = f.size();
+            size_t from = sz > want ? sz - want : 0;
+            f.seek(from);
+            if (from > 0) { while (f.available()) { if (f.read() == '\n') break; } }
+            out.reserve(want + 1);
+            char buf[256];
+            while (f.available()) {
+                int n = f.read((uint8_t*)buf, sizeof(buf) - 1);
+                if (n <= 0) break;
+                buf[n] = 0;
+                out += buf;
+            }
+            f.close();
+        }
+        spiffs_unlock();
+        if (out.length() == 0) out = "# leer\n";
+        auto* resp = r->beginResponse(200, "text/plain", out);
+        headers_apply(resp);
+        r->send(resp);
+    };
+    server.on("/sys-log-tail", HTTP_GET, [tail_send](AsyncWebServerRequest* r) { tail_send(r, "/sys.log"); });
+    server.on("/elm-log-tail", HTTP_GET, [tail_send](AsyncWebServerRequest* r) { tail_send(r, "/elm.log"); });
 
     server.on("/download-sys-log", HTTP_GET, [snapshot_and_send](AsyncWebServerRequest* r) {
         snapshot_and_send(r, "/sys.log", "/sys.log.snap");

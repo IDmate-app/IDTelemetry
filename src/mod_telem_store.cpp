@@ -44,25 +44,41 @@
 #define STATUS_WRITTEN     0xFE
 #define STATUS_SENT        0xFC
 
-// Auf-Disk Layout fuer eine Zeile.
-// Felder MUESSEN exakt zur TelemetryRow passen.
+// Auf-Disk Layout fuer eine Zeile (ab 1.5.0): Gueltig-Flags als Bitmaske,
+// damit 29 Felder in 128 B passen (vorher 1 Byte pro Feld: max. 24).
 struct __attribute__((packed)) Slot {
     uint8_t  status;                          // 1
     uint8_t  reserved[3];                     // 3   → 4   (reserved[0] = Layout-Version, FIXES B.5)
     uint32_t unix_s;                          // 4   → 8
-    float    values[TELEM_FIELD_COUNT];       // 88  → 96
-    uint8_t  valid[TELEM_FIELD_COUNT];        // 22  → 118
-    uint8_t  pad[SLOT_SIZE - 118];            // 10  → 128
+    float    values[TELEM_FIELD_COUNT];       // 4·N
+    uint32_t valid_mask;                      // 4   Bit i = Feld i gueltig
+    uint8_t  pad[SLOT_SIZE - 12 - 4 * TELEM_FIELD_COUNT];
 };
 static_assert(sizeof(Slot) == SLOT_SIZE, "Slot size must be 128");
-// FIXES B.5: reserved[0] trägt die Layout-Version (= TELEM_FIELD_COUNT). Ändert
-// sich TELEM_FIELD_COUNT, dekodiert der Boot-Scan sonst alte Slots im neuen
-// Layout → verschobene Garbage-Werte gehen als plausible Telemetrie raus.
-// Der static_assert oben fängt das NICHT (Padding hält 128 B konstant).
-// 0xFF = unversionierter Alt-Slot (vor diesem Fix) → wird als aktuelles Layout
-// akzeptiert; nur ein ANDERER konkreter Wert = fremdes Layout → verworfen.
-#define SLOT_LAYOUT_VERSION  ((uint8_t)TELEM_FIELD_COUNT)
-static_assert(TELEM_FIELD_COUNT < 0xFF, "Layout-Version muss in 1 Byte passen und != 0xFF sein");
+static_assert(TELEM_FIELD_COUNT <= 29, "mehr als 29 Felder passen nicht in 128 B");
+
+// Layout bis 1.4.x: 22 Felder, 1 Byte pro Gueltig-Flag. Wird beim Lesen noch
+// verstanden, damit ein Update den ungesendeten Backlog nicht wegwirft.
+#define LEGACY22_FIELDS 22
+struct __attribute__((packed)) SlotLegacy22 {
+    uint8_t  status;
+    uint8_t  reserved[3];
+    uint32_t unix_s;
+    float    values[LEGACY22_FIELDS];         // 88  → 96
+    uint8_t  valid[LEGACY22_FIELDS];          // 22  → 118
+    uint8_t  pad[SLOT_SIZE - 118];
+};
+static_assert(sizeof(SlotLegacy22) == SLOT_SIZE, "Legacy slot size must be 128");
+static_assert(TELEM_FIELD_COUNT >= LEGACY22_FIELDS, "Felder werden nur angehaengt");
+
+// FIXES B.5: reserved[0] trägt die Layout-Version. Ändert sich das Layout,
+// dekodiert der Boot-Scan sonst alte Slots im neuen Layout → verschobene
+// Garbage-Werte gehen als plausible Telemetrie raus.
+// 0xFF und 22 = Layout bis 1.4.x (unversioniert bzw. 22 Felder, Byte-Flags).
+// Ab 1.5.0: 0x80 | Feldanzahl (Bitmasken-Layout). Anderer Wert → verworfen.
+#define SLOT_LAYOUT_LEGACY22 ((uint8_t)LEGACY22_FIELDS)
+#define SLOT_LAYOUT_VERSION  ((uint8_t)(0x80 | TELEM_FIELD_COUNT))
+static_assert(SLOT_LAYOUT_VERSION != 0xFF, "Layout-Version muss != 0xFF sein");
 
 static const esp_partition_t* s_part        = nullptr;
 static uint32_t                s_total_slots = 0;
@@ -264,7 +280,8 @@ bool telem_store_append(const TelemetryRow& row) {
     slot.reserved[0] = SLOT_LAYOUT_VERSION; // FIXES B.5: Layout-Marker
     slot.unix_s = row.unix_s;
     memcpy(slot.values, row.values, sizeof(slot.values));
-    for (int i = 0; i < TELEM_FIELD_COUNT; i++) slot.valid[i] = row.valid[i] ? 0x01 : 0x00;
+    slot.valid_mask = 0;
+    for (int i = 0; i < TELEM_FIELD_COUNT; i++) if (row.valid[i]) slot.valid_mask |= (1UL << i);
 
     // Inhalt schreiben (Bytes 1..127, Status bleibt vorerst 0xFF)
     esp_err_t e = esp_partition_write(s_part,
@@ -306,7 +323,9 @@ bool telem_store_peek(TelemetryRow& out) {
     // FIXES B.5: fremdes Layout (Felderweiterung nach Flash) verwerfen statt als
     // verschobene Garbage-Telemetrie zu senden. 0xFF = unversionierter Alt-Slot
     // → als aktuelles Layout akzeptieren.
-    bool layout_ok = (slot.reserved[0] == 0xFF || slot.reserved[0] == SLOT_LAYOUT_VERSION);
+    uint8_t layout = slot.reserved[0];
+    bool legacy    = (layout == 0xFF || layout == SLOT_LAYOUT_LEGACY22);
+    bool layout_ok = legacy || layout == SLOT_LAYOUT_VERSION;
     if (slot.status != STATUS_WRITTEN || !layout_ok) {
         // defensiv: kaputten/fremden Slot überspringen
         s_tail = (s_tail + 1) % s_total_slots;
@@ -317,8 +336,17 @@ bool telem_store_peek(TelemetryRow& out) {
     }
 
     out.unix_s = slot.unix_s;
-    memcpy(out.values, slot.values, sizeof(out.values));
-    for (int i = 0; i < TELEM_FIELD_COUNT; i++) out.valid[i] = (slot.valid[i] != 0);
+    if (legacy) {
+        const SlotLegacy22& old = reinterpret_cast<const SlotLegacy22&>(slot);
+        for (int i = 0; i < TELEM_FIELD_COUNT; i++) {
+            bool in_old = i < LEGACY22_FIELDS;
+            out.values[i] = in_old ? old.values[i] : 0.0f;
+            out.valid[i]  = in_old && old.valid[i] != 0;
+        }
+    } else {
+        memcpy(out.values, slot.values, sizeof(out.values));
+        for (int i = 0; i < TELEM_FIELD_COUNT; i++) out.valid[i] = (slot.valid_mask >> i) & 1UL;
+    }
 
     xSemaphoreGive(s_mtx);
     return true;
