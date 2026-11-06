@@ -496,6 +496,25 @@ static void do_resend(uint32_t from, uint32_t to) {
     }
     qsort(items, n, sizeof(RsItem), rs_cmp);
 
+    // 1.6.6: Die Kopien entstehen am Kopf und loeschen dort Block fuer Block.
+    // Liegt eine noch nicht kopierte Quelle in diesem Bereich, ginge sie
+    // verloren (Diagnose 2026-11-06: nach dem Kopf-bei-0-Fehler lagen die
+    // Quellen direkt vor dem Kopf). Dann lieber ablehnen.
+    {
+        uint32_t head = 0;
+        if (xSemaphoreTake(s_mtx, pdMS_TO_TICKS(500)) == pdTRUE) { head = s_head; xSemaphoreGive(s_mtx); }
+        uint32_t reach = n + 2 * SLOTS_PER_SECTOR;
+        for (uint32_t i = 0; i < n; i++) {
+            uint32_t ahead = (items[i].idx + s_total_slots - head) % s_total_slots;
+            if (ahead < reach) {
+                free(items);
+                snprintf(s_rs_status, sizeof(s_rs_status), "Zeitraum reicht bis an die aeltesten Zeilen - kuerzer waehlen");
+                syslog("STORE", "Erneut senden abgelehnt: Quellen liegen im Bereich, den die Kopien ueberschreiben");
+                return;
+            }
+        }
+    }
+
     uint32_t done = 0;
     for (uint32_t i = 0; i < n; i++) {
         if (xSemaphoreTake(s_mtx, pdMS_TO_TICKS(500)) != pdTRUE) { vTaskDelay(10); continue; }
