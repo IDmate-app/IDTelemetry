@@ -1,5 +1,7 @@
 #include "config.h"
 #include "mod_web.h"
+#include "mod_telem_store.h"
+#include "mod_payload.h"
 #include "mod_can.h"
 #include "mod_logs.h"
 #include "mod_rtc.h"
@@ -229,6 +231,9 @@ void web_init() {
             doc["cal_2ab8"] = cal;
         }
         ota_status_json(doc);   // ota_possible, ota_slot, ota_other_build
+        doc["aes_example"]   = payload_key_is_example();      // 1.6.3: kein eigener Schluessel
+        doc["resend_status"] = telem_store_resend_status();
+        doc["rows_pending"]  = telem_store_pending();
         doc["uptime"]      = millis();
         doc["can_ok"]      = can_hw_ok();
         doc["log_cnt"]     = log_count;
@@ -765,6 +770,25 @@ void ble_web_routes_init() {
                 s_go = false;
                 if (ota_upload_end()) Serial.printf("[OTA] OK: %u Bytes\n", (unsigned)(index + len));
             }
+        }
+    );
+
+    // 1.6.3: gesendete Zeilen ab Zeitpunkt erneut senden. from/to = Unix-Sekunden
+    // (UTC; die Seite rechnet aus der Ortszeit des Browsers um).
+    server.on("/api/resend", HTTP_POST,
+        [](AsyncWebServerRequest* r) {},
+        nullptr,
+        [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) { r->send(400); return; }
+            uint32_t from = doc["from"] | 0u, to = doc["to"] | 0u;
+            bool ok = from >= 1704067200u && to > from && telem_store_request_resend(from, to);
+            if (ok) {
+                char m[80];
+                snprintf(m, sizeof(m), "Erneut senden angefordert: %lu..%lu", (unsigned long)from, (unsigned long)to);
+                syslog("WEB", m);
+            }
+            r->send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
         }
     );
 

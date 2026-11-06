@@ -15,7 +15,8 @@
 // BF_* enum lives in mod_payload.h (shared with mod_mqtt for debug logging).
 
 static uint8_t s_aes_key[32];
-static bool    s_aes_ready = false;
+static volatile bool s_aes_ready   = false;
+static bool          s_key_example = false;   // 1.6.3: Schluessel = alles 0
 
 static uint8_t hex_nibble(char c) {
     if (c >= '0' && c <= '9') return c - '0';
@@ -30,7 +31,31 @@ void payload_init_key() {
     for (int i = 0; i < 32; i++) {
         s_aes_key[i] = (hex_nibble(hex[i*2]) << 4) | hex_nibble(hex[i*2+1]);
     }
+    bool zero = true;
+    for (int i = 0; i < 32; i++) if (s_aes_key[i]) { zero = false; break; }
+    s_key_example = zero;
     s_aes_ready = true;
+}
+
+// 1.6.3: Der neue Schluessel gilt beim naechsten Telegramm, ohne Neustart.
+void payload_key_changed() { s_aes_ready = false; }
+
+bool payload_key_is_example() {
+    if (!s_aes_ready) payload_init_key();
+    return s_key_example;
+}
+
+// Release-Builds bringen den oeffentlichen Beispielschluessel (alles 0) mit.
+// Damit verschluesselte Telegramme kann der Server nicht lesen, sie gingen
+// still verloren (2026-11-06). Darum: nicht senden, Zeilen bleiben im Puffer,
+// und alle 5 Minuten eine Warnung.
+static void warn_example_key() {
+    static uint32_t s_ms = 0;
+    uint32_t now = millis();
+    if (s_ms != 0 && now - s_ms < 300000UL) return;
+    s_ms = now ? now : 1;
+    syslog("PAYLOAD", "!!!! KEIN AES-Key: Beispielschluessel (alles 0) aktiv - es wird NICHT gesendet. "
+                      "Schluessel in der Konfiguration eintragen, die Zeilen bleiben im Puffer.");
 }
 
 static inline void put_u8 (uint8_t* p, uint8_t  v) { p[0]=v; }
@@ -147,6 +172,7 @@ static int build_plaintext(const TelemetryRow& row, uint8_t* buf, int buf_size) 
 static int encrypt_frame(uint8_t version, const uint8_t* plain, int plain_len,
                          uint8_t* out, int out_size) {
     if (!s_aes_ready) payload_init_key();
+    if (s_key_example) { warn_example_key(); return 0; }
     if (plain_len <= 0) return 0;
 
     int pad = 16 - (plain_len % 16);

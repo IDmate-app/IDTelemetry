@@ -693,6 +693,9 @@ static void telem_task(void* /*param*/) {
         // ── 1.6.2: ohne VBUS Hoermodus + Statistik ──────────
         can_passive_tick();
 
+        // ── 1.6.3: "Erneut senden" aus der Konfig-Seite ─────
+        telem_store_tick();
+
         // ── CAN: max. 1 Abfrage pro Tick (1 s) ──────────────
         // Die am meisten überfällige DID wird zuerst bedient.
         if (can_hw_ok() && !scan_running && !monitor_mode) {

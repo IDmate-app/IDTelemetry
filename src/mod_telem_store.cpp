@@ -279,9 +279,18 @@ void telem_store_init() {
     xSemaphoreGive(s_mtx);
 }
 
+static bool append_locked(const TelemetryRow& row);
+
 bool telem_store_append(const TelemetryRow& row) {
     if (!s_part || !s_mtx) return false;
     if (xSemaphoreTake(s_mtx, pdMS_TO_TICKS(500)) != pdTRUE) return false;
+    bool ok = append_locked(row);
+    xSemaphoreGive(s_mtx);
+    return ok;
+}
+
+// Aufrufer haelt s_mtx.
+static bool append_locked(const TelemetryRow& row) {
 
     // Wenn Buffer voll: aeltesten Block opfern (32 Rows weg) damit wir weiter aufnehmen.
     // Das passiert nur nach > 40k Rows ohne Upload (sehr selten).
@@ -314,21 +323,38 @@ bool telem_store_append(const TelemetryRow& row) {
                                       ((uint8_t*)&slot) + 1,
                                       SLOT_SIZE - 1);
     if (e != ESP_OK) {
-        xSemaphoreGive(s_mtx);
         syslog("STORE", "Append: Write Body fehlgeschlagen");
         return false;
     }
 
     // Commit: Status 0xFF → 0xFE
     if (!write_status(s_head, STATUS_WRITTEN)) {
-        xSemaphoreGive(s_mtx);
         syslog("STORE", "Append: Status-Commit fehlgeschlagen");
         return false;
     }
 
     s_head = (s_head + 1) % s_total_slots;
     s_pending++;
-    xSemaphoreGive(s_mtx);
+    return true;
+}
+
+// Slot (aktuelles oder 22-Felder-Layout) → TelemetryRow. false = fremdes Layout.
+static bool slot_to_row(const Slot& slot, TelemetryRow& out) {
+    uint8_t layout = slot.reserved[0];
+    bool legacy    = (layout == 0xFF || layout == SLOT_LAYOUT_LEGACY22);
+    if (!legacy && layout != SLOT_LAYOUT_VERSION) return false;
+    out.unix_s = slot.unix_s;
+    if (legacy) {
+        const SlotLegacy22& old = reinterpret_cast<const SlotLegacy22&>(slot);
+        for (int i = 0; i < TELEM_FIELD_COUNT; i++) {
+            bool in_old = i < LEGACY22_FIELDS;
+            out.values[i] = in_old ? old.values[i] : 0.0f;
+            out.valid[i]  = in_old && old.valid[i] != 0;
+        }
+    } else {
+        memcpy(out.values, slot.values, sizeof(out.values));
+        for (int i = 0; i < TELEM_FIELD_COUNT; i++) out.valid[i] = (slot.valid_mask >> i) & 1UL;
+    }
     return true;
 }
 
@@ -348,29 +374,14 @@ bool telem_store_peek(TelemetryRow& out) {
     // FIXES B.5: fremdes Layout (Felderweiterung nach Flash) verwerfen statt als
     // verschobene Garbage-Telemetrie zu senden. 0xFF = unversionierter Alt-Slot
     // → als aktuelles Layout akzeptieren.
-    uint8_t layout = slot.reserved[0];
-    bool legacy    = (layout == 0xFF || layout == SLOT_LAYOUT_LEGACY22);
-    bool layout_ok = legacy || layout == SLOT_LAYOUT_VERSION;
+    bool layout_ok = slot.status == STATUS_WRITTEN && slot_to_row(slot, out);
     if (slot.status != STATUS_WRITTEN || !layout_ok) {
         // defensiv: kaputten/fremden Slot überspringen
         s_tail = (s_tail + 1) % s_total_slots;
         if (s_pending > 0) s_pending--;
-        if (!layout_ok) syslog("STORE", "Peek: Slot mit fremdem Layout verworfen (B.5)");
+        if (slot.status == STATUS_WRITTEN) syslog("STORE", "Peek: Slot mit fremdem Layout verworfen (B.5)");
         xSemaphoreGive(s_mtx);
         return false;
-    }
-
-    out.unix_s = slot.unix_s;
-    if (legacy) {
-        const SlotLegacy22& old = reinterpret_cast<const SlotLegacy22&>(slot);
-        for (int i = 0; i < TELEM_FIELD_COUNT; i++) {
-            bool in_old = i < LEGACY22_FIELDS;
-            out.values[i] = in_old ? old.values[i] : 0.0f;
-            out.valid[i]  = in_old && old.valid[i] != 0;
-        }
-    } else {
-        memcpy(out.values, slot.values, sizeof(out.values));
-        for (int i = 0; i < TELEM_FIELD_COUNT; i++) out.valid[i] = (slot.valid_mask >> i) & 1UL;
     }
 
     xSemaphoreGive(s_mtx);
@@ -397,4 +408,104 @@ uint32_t telem_store_pending() {
 
 uint32_t telem_store_capacity() {
     return s_total_slots;
+}
+
+// ============================================================
+//  1.6.3: Erneut senden ab Zeitpunkt
+//  Gesendete Slots (0xFC) koennen ohne Erase nicht zurueck auf 0xFE. Darum
+//  werden sie als neue Zeilen mit ihrem alten Zeitstempel hinten angehaengt.
+//  Der Server schreibt sie unter demselben Zeitstempel; was schon da war,
+//  wird nur ueberschrieben. Laeuft im Telemetrie-Task (telem_store_tick),
+//  nicht im Web-Handler — der Scan liest die ganze Partition.
+// ============================================================
+
+static volatile bool s_rs_req  = false;
+static uint32_t      s_rs_from = 0, s_rs_to = 0;
+static char          s_rs_status[96] = "";
+
+struct RsItem { uint32_t ts; uint32_t idx; };
+
+static int rs_cmp(const void* a, const void* b) {
+    uint32_t x = ((const RsItem*)a)->ts, y = ((const RsItem*)b)->ts;
+    return x < y ? -1 : (x > y ? 1 : 0);
+}
+
+bool telem_store_request_resend(uint32_t from_unix, uint32_t to_unix) {
+    if (!s_part || s_rs_req || to_unix <= from_unix) return false;
+    s_rs_from = from_unix;
+    s_rs_to   = to_unix;
+    snprintf(s_rs_status, sizeof(s_rs_status), "laeuft");
+    s_rs_req  = true;
+    return true;
+}
+
+const char* telem_store_resend_status() { return s_rs_status; }
+
+static void do_resend(uint32_t from, uint32_t to) {
+    // Hoechstens ein Viertel des Puffers: die neuen Zeilen duerfen die alten,
+    // noch zu kopierenden nicht ueberholen (Erase am Kopf).
+    uint32_t max_items = s_total_slots / 4;
+    RsItem* items = (RsItem*)malloc(max_items * sizeof(RsItem));
+    uint8_t* sec  = (uint8_t*)malloc(SECTOR_SIZE);
+    if (!items || !sec) {
+        free(items); free(sec);
+        snprintf(s_rs_status, sizeof(s_rs_status), "Fehler: kein Speicher");
+        syslog("STORE", "Erneut senden: kein Speicher");
+        return;
+    }
+
+    uint32_t n = 0;
+    bool too_many = false;
+    uint32_t num_sectors = s_total_slots / SLOTS_PER_SECTOR;
+    for (uint32_t sc = 0; sc < num_sectors && !too_many; sc++) {
+        if (xSemaphoreTake(s_mtx, pdMS_TO_TICKS(500)) != pdTRUE) continue;
+        esp_err_t e = esp_partition_read(s_part, sc * SECTOR_SIZE, sec, SECTOR_SIZE);
+        xSemaphoreGive(s_mtx);
+        if (e != ESP_OK) continue;
+        for (uint32_t k = 0; k < SLOTS_PER_SECTOR; k++) {
+            const Slot* sl = (const Slot*)(sec + k * SLOT_SIZE);
+            if (sl->status != STATUS_SENT) continue;
+            if (sl->unix_s < from || sl->unix_s > to) continue;
+            if (n >= max_items) { too_many = true; break; }
+            items[n].ts  = sl->unix_s;
+            items[n].idx = sc * SLOTS_PER_SECTOR + k;
+            n++;
+        }
+        if ((sc & 31) == 31) vTaskDelay(1);
+    }
+    free(sec);
+
+    if (too_many) {
+        free(items);
+        snprintf(s_rs_status, sizeof(s_rs_status), "Zeitraum zu gross (mehr als %u Zeilen)", (unsigned)max_items);
+        syslog("STORE", "Erneut senden abgelehnt: Zeitraum zu gross");
+        return;
+    }
+    qsort(items, n, sizeof(RsItem), rs_cmp);
+
+    uint32_t done = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        if (xSemaphoreTake(s_mtx, pdMS_TO_TICKS(500)) != pdTRUE) { vTaskDelay(10); continue; }
+        Slot slot;
+        TelemetryRow row;
+        bool ok = esp_partition_read(s_part, slot_offset(items[i].idx), &slot, SLOT_SIZE) == ESP_OK
+                  && slot.status == STATUS_SENT && slot.unix_s == items[i].ts
+                  && slot_to_row(slot, row) && append_locked(row);
+        xSemaphoreGive(s_mtx);
+        if (ok) done++;
+        if ((i & 15) == 15) vTaskDelay(1);
+    }
+    free(items);
+
+    snprintf(s_rs_status, sizeof(s_rs_status), "%u Zeilen erneut eingereiht", (unsigned)done);
+    char m[112];
+    snprintf(m, sizeof(m), "Erneut senden: %u von %u Zeilen eingereiht (%lu..%lu)",
+             (unsigned)done, (unsigned)n, (unsigned long)from, (unsigned long)to);
+    syslog("STORE", m);
+}
+
+void telem_store_tick() {
+    if (!s_rs_req || !s_part || !s_mtx) return;
+    do_resend(s_rs_from, s_rs_to);
+    s_rs_req = false;
 }
