@@ -387,6 +387,7 @@ struct RawDid {
 static RawDid s_raw_did[] = {
     { 0, 0x0364, 0, {}, 0, 0 },
     { 0, 0x2613, 0, {}, 0, 0 },
+    { 0, 0x2AB8, 0, {}, 0, 0 },   // 1.5.2: fragt ABRP alle 5 s (ECU 710), faellt beim Fahren
 };
 static constexpr int RAW_DID_COUNT = sizeof(s_raw_did) / sizeof(s_raw_did[0]);
 static portMUX_TYPE s_raw_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -456,6 +457,80 @@ void telem_raw_did_str(char* buf, int size) {
     }
 }
 
+// ── 2AB8-Kalibrierung (1.5.2) ────────────────────────────────
+// 2AB8 (ECU 710) faellt beim Fahren gleichmaessig — vermutlich Energieinhalt
+// laut BMS, Einheit unbekannt. Der Stick misst die Energie selbst: Leistung
+// (Spannung × Strom, alle 5 s) aufintegriert. Zwischen zwei 2AB8-Staenden mit
+// genug Abstand ergibt Energie ÷ Einheiten den Faktor Wh pro Einheit. Ergebnis
+// ins Syslog ("CAL2AB8"), in /status und "rawdid"; gesendet wird noch nichts.
+static portMUX_TYPE s_cal_mux = portMUX_INITIALIZER_UNLOCKED;
+static double   s_e_wh        = 0.0;   // aufintegrierte Energie (Vorzeichen wie TELEM_POWER)
+static uint32_t s_e_last_ms   = 0;     // letzter Strom-Wert
+static uint32_t s_e_gaps      = 0;     // Luecken > 20 s (Anker wird dann verworfen)
+static bool     s_cal_have    = false; // Anker gesetzt
+static uint32_t s_cal_raw0    = 0;
+static double   s_cal_e0      = 0.0;
+static uint32_t s_cal_gaps0   = 0;
+static float    s_cal_hist[8] = {};    // letzte Faktoren (Wh/Einheit)
+static int      s_cal_n       = 0;
+static constexpr uint32_t CAL_MIN_UNITS = 100;   // ~6 min Autobahn
+
+static void energy_integrate(float kw) {
+    uint32_t now = millis();
+    portENTER_CRITICAL(&s_cal_mux);
+    if (s_e_last_ms != 0) {
+        uint32_t dt = now - s_e_last_ms;
+        if (dt <= 20000) s_e_wh += (double)kw * (double)dt / 3600.0;   // kW·ms/3600 = Wh
+        else s_e_gaps++;
+    }
+    s_e_last_ms = now ? now : 1;
+    portEXIT_CRITICAL(&s_cal_mux);
+}
+
+static float cal_median_locked() {
+    int n = s_cal_n < 8 ? s_cal_n : 8;
+    if (n == 0) return 0.f;
+    float v[8];
+    for (int i = 0; i < n; i++) v[i] = s_cal_hist[i];
+    for (int i = 1; i < n; i++) for (int j = i; j > 0 && v[j - 1] > v[j]; j--) { float t = v[j]; v[j] = v[j - 1]; v[j - 1] = t; }
+    return (n % 2) ? v[n / 2] : 0.5f * (v[n / 2 - 1] + v[n / 2]);
+}
+
+static void cal_2ab8(uint32_t raw) {
+    bool report = false;
+    uint32_t raw0 = 0; int32_t du = 0; double de = 0; float f = 0, med = 0; int n = 0;
+    portENTER_CRITICAL(&s_cal_mux);
+    if (!s_cal_have || s_e_gaps != s_cal_gaps0) {
+        s_cal_have = true; s_cal_raw0 = raw; s_cal_e0 = s_e_wh; s_cal_gaps0 = s_e_gaps;
+    } else {
+        du = (int32_t)s_cal_raw0 - (int32_t)raw;                  // > 0 beim Entladen
+        if ((du < 0 ? -du : du) >= (int32_t)CAL_MIN_UNITS) {
+            de = s_e_wh - s_cal_e0;
+            f = (float)(de / (double)du);                          // Wh pro Einheit
+            s_cal_hist[s_cal_n % 8] = f < 0 ? -f : f;
+            s_cal_n++;
+            med = cal_median_locked(); n = s_cal_n; raw0 = s_cal_raw0;
+            s_cal_raw0 = raw; s_cal_e0 = s_e_wh;
+            report = true;
+        }
+    }
+    portEXIT_CRITICAL(&s_cal_mux);
+    if (!report) return;
+    char m[140];
+    snprintf(m, sizeof(m), "2AB8 %lu->%lu (%+ld) VxI %+.0f Wh = %.2f Wh/E, Median %.2f n=%d, ~%.1f kWh",
+             (unsigned long)raw0, (unsigned long)raw, (long)(-du), de, f, med, n, (double)raw * med / 1000.0);
+    syslog("CAL2AB8", m);
+}
+
+void telem_cal_str(char* buf, int size) {
+    portENTER_CRITICAL(&s_cal_mux);
+    float med = cal_median_locked();
+    int n = s_cal_n;
+    double e = s_e_wh;
+    portEXIT_CRITICAL(&s_cal_mux);
+    snprintf(buf, size, "2AB8: %.2f Wh/Einheit (n=%d) · Energiezaehler %.0f Wh", med, n, e);
+}
+
 // Formeln fuer die neuen Felder. A = d[0], B = d[1], ... (ohne 62 + DID).
 // TODO (Ladepause): aus ELM-Log/Syslog-Rohbytes + ABRP-Screenshot ableiten.
 // Vorlage (Beispiel, NICHT verifiziert):
@@ -468,6 +543,10 @@ static void decode_new_did(uint16_t did, const uint8_t* d, int n) {
             break;
         case 0x2613:  // Innentemp. (°C) / Klima (kW) → TELEM_CABIN_TEMP -40 … 80,
             break;    //                            TELEM_HVAC_KW    -1 … 15
+        case 0x2AB8:  // 8 Bytes, A:B:C:D steigt/faellt mit dem Energieinhalt (Log 2026-11-06)
+            if (n >= 4) cal_2ab8(((uint32_t)d[0] << 24) | ((uint32_t)d[1] << 16) |
+                                 ((uint32_t)d[2] << 8) | d[3]);
+            break;    // → TELEM_SOE, sobald der Faktor feststeht
         default:
             break;
     }
@@ -561,6 +640,7 @@ static void decode_did_response(uint16_t did, const uint8_t* d, int n) {
         if (v_ok && c_ok) {
             float kw = volt_val * curr_val / 1000.f;
             telem_update(TELEM_POWER, kw, plausible(kw, -500.f, 500.f));
+            if (did == 0x1E3D && plausible(kw, -500.f, 500.f)) energy_integrate(kw);
         }
     }
 }
@@ -587,6 +667,8 @@ static CanQuerySlot s_can_schedule[] = {
     // ── 1.5.0 (ROADMAP 2): fragt ABRP ohnehin; Formel noch offen → Rohbytes ──
     { ECU_FC0076_REQ, ECU_FC0076_RESP, 0x0364, 30000, 0 },   // [12] SoE (Vermutung)
     { ECU_746_REQ,    ECU_746_RESP,    0x2613, 30000, 0 },   // [13] Klima/Innen (Vermutung)
+    // ── 1.5.2: Energieinhalt? ABRP fragt ihn alle 5 s, der Stick kannte ihn nicht ──
+    { ECU_710_REQ,    ECU_710_RESP,    0x2AB8, 10000, 0 },   // [14] Energieinhalt (Kalibrierung)
 };
 static constexpr int CAN_SCHEDULE_COUNT = sizeof(s_can_schedule) / sizeof(s_can_schedule[0]);
 

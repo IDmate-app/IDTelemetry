@@ -63,6 +63,7 @@
   "cfg.save": "\u2713 Speichern",
   "cfg.reload": "\u21bb Neu laden",
   "cfg.save_hint": "Werte werden sofort im NVS gespeichert. F\u00fcr SIM PIN, APN und AP-SSID/Passwort ist ein Neustart n\u00f6tig.",
+  "cfg.ota_unavailable": "Web-Update geht bei diesem Stick nicht: die Partitionstabelle hat nur einen Firmware-Platz. Update per USB (PlatformIO oder Web-Flasher am PC).",
   "cfg.ota_title": "Firmware Update (OTA)",
   "cfg.ota_drop": ".bin Datei hier ablegen oder klicken",
   "cfg.ota_drop_sub": "(PlatformIO: .pio/build/<env>/firmware.bin)",

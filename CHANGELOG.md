@@ -3,6 +3,17 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.5.2] – 2026-11-06
+
+### Added
+
+- **DID 0x2AB8 (ECU 710)**: ABRP asks for it every 5 s and every request went onto the bus. The stick now polls it itself every 10 s and answers ABRP from its cache. The value falls steadily while driving (likely the BMS energy content).
+- **Self-calibration**: the stick integrates its own power (voltage × current, every 5 s) between two 2AB8 readings ≥ 100 units apart and logs Wh per unit (`CAL2AB8` in the syslog, `cal_2ab8` in `/status`, serial `rawdid`). Nothing is sent to IDmate until the factor is stable.
+
+### Changed
+
+- The configuration page hides the web update when the partition table has no second firmware slot (this stick: one slot → USB only) instead of failing on upload.
+
 ## [1.5.1] – 2026-11-06
 
 ### Fixed

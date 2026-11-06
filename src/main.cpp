@@ -395,6 +395,8 @@ void loop() {
                 } else if (strcmp(serial_buf, "rawdid") == 0) {
                     char raw[192]; telem_raw_did_str(raw, sizeof(raw));
                     Serial.printf("[CMD] Rohbytes: %s\n", raw);
+                    char cal[96]; telem_cal_str(cal, sizeof(cal));
+                    Serial.printf("[CMD] %s\n", cal);
                 } else if (strcmp(serial_buf, "version") == 0) {
                     Serial.printf("[CMD] Firmware %s  Build %s  (%s)\n", FW_VERSION, FW_BUILD, FW_VARIANT);
                 } else if (strcmp(serial_buf, "help") == 0) {

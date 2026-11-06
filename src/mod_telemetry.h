@@ -118,3 +118,5 @@ bool telem_get_raw_did(uint32_t req_id, uint16_t did, uint8_t* out, int max_out,
                        int* out_len, uint32_t* out_age_ms);
 // "0364=62 03 64 ..; 2613=.." fuer /status, Serial und Syslog
 void telem_raw_did_str(char* buf, int size);
+// 2AB8-Kalibrierung: Wh pro Einheit aus Spannung × Strom (1.5.2)
+void telem_cal_str(char* buf, int size);
