@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.5] – 2026-11-06
+
+### Fixed
+
+- **Ring buffer started at slot 0 after every boot with nothing unsent** ("Boot-Scan: leer"): each new trip overwrote the already sent rows of the last trips from the front, which "send again" still needs. Now the boot scan continues behind the newest row (highest timestamp), so sent rows stay until the buffer really wraps.
+- **False "battery critical" sleep**: 25 s after a web update, with flickering VBUS, the stick went to sleep with "Akku kritisch" although the battery read 100 % an hour before. The low reading must now last 30 s (and resets whenever VBUS is seen).
+
 ## [1.6.4] – 2026-11-06
 
 ### Fixed
