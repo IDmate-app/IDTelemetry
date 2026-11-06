@@ -200,14 +200,20 @@ static void row_try_capture() {
     // (im Log: 6048 km in 3 s). Alles > 200 m/s (=720 km/h) ist physikalisch unmoeglich
     // fuer ein Auto und wird als Glitch verworfen. Der s_cap_*-State bleibt erhalten,
     // der naechste Tick versucht es erneut mit einer frischen Position.
-    if (s_cap_ms > 0 && elapsed > 0) {
-        float max_m = (elapsed / 1000.0f) * 200.0f;  // 200 m/s
+    // 1.6.6: Den Filter mit der ECHTEN Strecke und Zeit rechnen. Vorher bekam
+    // eine erzwungene Zeile (VBUS weg, Schlafen, Laden) die Platzhalter 9999 m /
+    // 99999 ms, und der 2-km-Deckel verwarf sie IMMER als "GPS-Glitch" — die
+    // letzte Zeile jeder Fahrt (Parkposition, End-km, End-SoC) fehlte.
+    if (s_cap_ms > 0 && now - s_cap_ms > 0) {
+        uint32_t el_real   = now - s_cap_ms;
+        float    dist_real = force ? haversine_m(s_cap_lat, s_cap_lon, lat, lon) : dist;
+        float max_m = (el_real / 1000.0f) * 200.0f;  // 200 m/s
         if (max_m < 500.0f)  max_m = 500.0f;          // Mindestens 500 m zulassen (GPS-Rauschen)
         if (max_m > 2000.0f) max_m = 2000.0f;         // Deckel: zwischen Rows nie >2 km (Nachsenden ist row-by-row)
-        if (dist > max_m) {
+        if (dist_real > max_m) {
             char m[96]; snprintf(m, sizeof(m),
                 "GPS-Glitch verworfen: %.0fm in %lums (max %.0fm)",
-                dist, (unsigned long)elapsed, max_m);
+                dist_real, (unsigned long)el_real, max_m);
             syslog("TELEM", m);
             xSemaphoreGive(s_capture_mtx);
             return;

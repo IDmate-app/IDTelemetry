@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.6] – 2026-11-06
+
+### Fixed
+
+- **The last row of every trip was dropped**: a forced capture (power gone, going to sleep, charging events) got the placeholders 9999 m / 99999 ms, and the 2 km cap of the GPS glitch filter always rejected it ("GPS-Glitch verworfen: 9999m in 99999ms"). The parking position, final odometer and final SoC never reached the server. The filter now uses the real distance and time since the last row.
+- **Send again could lose rows** when its sources lay right ahead of the write position (the copies erase block by block there). It now refuses such a period instead ("Zeitraum reicht bis an die aeltesten Zeilen").
+
 ## [1.6.5] – 2026-11-06
 
 ### Fixed
