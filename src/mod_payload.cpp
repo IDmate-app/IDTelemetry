@@ -1,4 +1,6 @@
 #include "mod_payload.h"
+#include "config.h"
+#include <math.h>
 #include "mod_logs.h"
 #include <stdio.h>
 #include "mod_telemetry.h"
@@ -117,35 +119,53 @@ static int build_plaintext(const TelemetryRow& row, uint8_t* buf, int buf_size) 
             mask |= BF_LTE_PLMN; put_u16(buf + pos, (uint16_t)plmn); pos += 2;
         }
     }
+    // ── 1.5.0: Bits 20-22 (Reihenfolge = Bitreihenfolge, hinten anhaengen) ──
+    if (row.valid[TELEM_SOE] && pos + 2 <= buf_size) {
+        float v = row.values[TELEM_SOE];
+        if (v >= 0.f && v < 6500.f) {
+            mask |= BF_SOE; put_u16(buf + pos, (uint16_t)(v * 10.0f + 0.5f)); pos += 2;
+        }
+    }
+    if (row.valid[TELEM_HVAC_KW] && pos + 2 <= buf_size) {
+        float v = row.values[TELEM_HVAC_KW];
+        if (v > -320.f && v < 320.f) {
+            mask |= BF_HVAC_KW; put_i16(buf + pos, (int16_t)lroundf(v * 100.0f)); pos += 2;
+        }
+    }
+    if (row.valid[TELEM_CABIN_TEMP] && pos + 1 <= buf_size) {
+        float v = row.values[TELEM_CABIN_TEMP];
+        if (v > -100.f && v < 120.f) {
+            mask |= BF_CABIN_TEMP; put_i8(buf + pos, (int8_t)lroundf(v)); pos += 1;
+        }
+    }
     put_u32(buf + 0, mask);
     put_u32(buf + 4, row.unix_s);
     return pos;
 }
 
-int payload_encode(const TelemetryRow& row, uint8_t* out, int out_size) {
+// [version][IV][AES-256-CBC(plain, PKCS7)] — gemeinsam fuer Werte und Info.
+static int encrypt_frame(uint8_t version, const uint8_t* plain, int plain_len,
+                         uint8_t* out, int out_size) {
     if (!s_aes_ready) payload_init_key();
-
-    uint8_t plain[96];
-    int plain_len = build_plaintext(row, plain, sizeof(plain));
-    if (plain_len == 0) return 0;
+    if (plain_len <= 0) return 0;
 
     int pad = 16 - (plain_len % 16);
     int padded_len = plain_len + pad;
     int total = 1 + 16 + padded_len;
     if (total > out_size) return 0;
 
-    out[0] = 0x02;  // protocol v2: kw widened from u16 to u32
+    uint8_t padded[160];
+    if (padded_len > (int)sizeof(padded)) return 0;
+    memcpy(padded, plain, plain_len);
+    memset(padded + plain_len, pad, pad);
+
+    out[0] = version;
     uint8_t iv[16];
     for (int i = 0; i < 4; i++) {
         uint32_t r = esp_random();
         memcpy(iv + i * 4, &r, 4);
     }
     memcpy(out + 1, iv, 16);
-
-    uint8_t padded[128];
-    if (padded_len > (int)sizeof(padded)) return 0;
-    memcpy(padded, plain, plain_len);
-    memset(padded + plain_len, pad, pad);
 
     esp_aes_context ctx;
     esp_aes_init(&ctx);
@@ -156,4 +176,21 @@ int payload_encode(const TelemetryRow& row, uint8_t* out, int out_size) {
                                  iv_copy, padded, out + 17);
     esp_aes_free(&ctx);
     return (ret == 0) ? total : 0;
+}
+
+int payload_encode(const TelemetryRow& row, uint8_t* out, int out_size) {
+    uint8_t plain[96];
+    int plain_len = build_plaintext(row, plain, sizeof(plain));
+    if (plain_len == 0) return 0;
+    // protocol v2: kw widened from u16 to u32; Bits 20-22 angehaengt (bleibt v2)
+    return encrypt_frame(PAYLOAD_VERSION_VALUES, plain, plain_len, out, out_size);
+}
+
+int payload_encode_info(uint8_t* out, int out_size) {
+    char json[128];
+    int n = snprintf(json, sizeof(json),
+                     "{\"fw\":\"%s\",\"build\":\"%s\",\"var\":\"%s\",\"pv\":%d,\"bits\":%d}",
+                     FW_VERSION, FW_BUILD, FW_VARIANT, PAYLOAD_VERSION_VALUES, PAYLOAD_BITS);
+    if (n <= 0 || n >= (int)sizeof(json)) return 0;
+    return encrypt_frame(PAYLOAD_VERSION_INFO, (const uint8_t*)json, n, out, out_size);
 }

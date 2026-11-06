@@ -225,6 +225,16 @@ static bool mqtt_publish_payload(const char* host, uint16_t port, const char* to
         }
         char m[80]; snprintf(m, sizeof(m), "MQTT-WiFi connected (QoS1): %s:%u", host, port);
         syslog("WIFI_UP", m);
+
+        // Info-Telegramm (Firmware/Build/Format) einmal pro Verbindung, gleiches
+        // Topic wie die Werte. QoS 0: geht es verloren, kommt es beim naechsten
+        // Verbindungsaufbau wieder; die Row-Uebertragung wartet nicht darauf.
+        static uint8_t infobuf[160];
+        int in = payload_encode_info(infobuf, sizeof(infobuf));
+        if (in > 0 && s_mqtt.publish(topic, /*qos*/0, /*retain*/false, infobuf, (size_t)in) != 0) {
+            s_mqtt.loop();
+            syslog("WIFI_UP", "MQTT-WiFi Info gesendet");
+        }
     }
 
     // FIXES B.4: QoS-1-Publish und auf PUBACK warten. Erst wenn der Broker den

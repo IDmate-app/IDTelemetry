@@ -381,7 +381,27 @@ static bool handle_uds_did(uint16_t did, String& response) {
         return false;
     }
 
-    // Unbekannte DID (z.B. 0x0364, 0x2613): CAN-Fallback für Kompatibilität
+    // 0x0364 / 0x2613 (Formel noch offen): pollt der Stick selbst seit 1.5.0.
+    // Frische Rohantwort derselben ECU → aus dem Cache, kein CAN-Verkehr.
+    {
+        uint8_t raw[32]; int raw_len = 0; uint32_t raw_age = 0;
+        if (telem_get_raw_did(elm_req_id, did, raw, sizeof(raw), &raw_len, &raw_age) &&
+            raw_age <= 45000 && raw_len > 0) {
+            char hdr[12];
+            snprintf(hdr, sizeof(hdr), elm_spaces ? "62 %02X %02X " : "62%02X%02X",
+                     (uint8_t)(did >> 8), (uint8_t)(did & 0xFF));
+            response = hdr;
+            for (int i = 0; i < raw_len; i++) {
+                char h[4];
+                snprintf(h, sizeof(h), elm_spaces ? "%02X " : "%02X", raw[i]);
+                response += h;
+            }
+            response.trim();
+            return true;
+        }
+    }
+
+    // Sonst unbekannte DID: CAN-Fallback für Kompatibilität
     uint8_t req_data[3] = { 0x22, (uint8_t)(did >> 8), (uint8_t)(did & 0xFF) };
 
     if (!can_lock(1500)) { response = "NO DATA"; return false; }
@@ -412,7 +432,7 @@ static bool handle_uds_did(uint16_t did, String& response) {
     int pdu_len = isotp_reassemble(frames, lens, n, pdu, sizeof(pdu));
 
     if (pdu_len >= 4 && pdu[0] == 0x62)
-        telem_feed_did(did, pdu + 3, pdu_len - 3);
+        telem_feed_did(did, pdu + 3, pdu_len - 3, elm_req_id);
 
     if (elm_caf && pdu_len > 0) {
         response = pdu_to_hex(pdu, pdu_len);

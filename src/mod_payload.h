@@ -33,6 +33,11 @@ enum BinField : uint32_t {
     BF_LTE_SIG   = (1u << 17),
     BF_BATT_DEV  = (1u << 18),
     BF_LTE_PLMN  = (1u << 19),
+    // 1.5.0 (ROADMAP 2): NUR anhaengen, nie umnummerieren. Ein aelterer Server
+    // liest die Bits, die er kennt, und ignoriert den Rest am Ende.
+    BF_SOE        = (1u << 20),  // u16  kWh × 10
+    BF_HVAC_KW    = (1u << 21),  // i16  kW × 100
+    BF_CABIN_TEMP = (1u << 22),  // i8   °C
 };
 
 // ============================================================
@@ -50,6 +55,20 @@ enum BinField : uint32_t {
 //  Plaintext layout inside the ciphertext:
 //    [mask u32 LE][unix_s u32 LE][packed fields per BF_* bitmask]
 // ============================================================
+
+//  Info-Telegramm (einmal pro Verbindung, IDmate ab 1.2.255):
+//    [0x10][IV 16B][AES-CBC(JSON)]
+//    JSON = {"fw":"1.5.0","build":"1.5.0-2-gabc1234","var":"full","pv":2,"bits":23}
+//    pv = Version der Werte-Telegramme, bits = Anzahl bekannter Bits.
+//    Ein aelterer Server kennt 0x10 nicht und verwirft es.
+// ============================================================
+
+#define PAYLOAD_VERSION_VALUES 0x02
+#define PAYLOAD_VERSION_INFO   0x10
+#define PAYLOAD_BITS           23
+
+// Info-Telegramm bauen. `out` mindestens 160 Bytes. Rueckgabe: Laenge oder 0.
+int  payload_encode_info(uint8_t* out, int out_size);
 
 // Build the binary plaintext + encrypt it with AES-256-CBC.
 // `out` must hold at least 96 bytes (max plaintext + IV + version).

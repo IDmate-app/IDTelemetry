@@ -216,7 +216,7 @@
     <div id="wifi-list"><div style="color:var(--muted);font-size:12px" data-i18n="dbg.wifi_loading">Lade...</div></div>
   </div>
 
-  <!-- ELM Log (nur sichtbar wenn log_can aktiv) -->
+  <!-- ELM Log (Hinweis, wenn log_can aus ist) -->
   <div id="sec-elm-log" style="display:none">
   <div class="section-title" style="margin-top:16px" data-i18n="dbg.elm_title">ELM327 / ABRP Log
     <button class="btn danger" style="margin-left:auto;font-size:10px;padding:2px 10px" onclick="clearElmLog()" data-i18n="dbg.elm_delete">&#10005; L&#246;schen</button>
@@ -258,7 +258,7 @@
 <script src="/i18n.js"></script>
 <script>
 // ── Status Polling ────────────────────────────────────────
-async function fetchStatus(){try{var d=await(await fetch('/status')).json();if(d.fw_version){var v=document.getElementById('fw-ver');if(v)v.textContent='v'+d.fw_version;}setLed('can',d.can_ok?'green':'blue');if(!d.gyro_ok)setLed('gyro','');else setLed('gyro',d.gyro_state===2?'yellow':'green');setLed('gps',d.gps_valid?'green':'');if(d.gyro_threshold!=null){gThr=d.gyro_threshold;var inp=document.getElementById('gyro-thr-input');if(inp)inp.value=gThr.toFixed(3);}
+async function fetchStatus(){try{var d=await(await fetch('/status')).json();if(d.fw_version){var v=document.getElementById('fw-ver');if(v){var b=d.fw_build&&d.fw_build!==d.fw_version?' · '+d.fw_build:'';v.textContent='v'+d.fw_version+(d.fw_variant?' '+d.fw_variant:'')+b;v.title='Build '+(d.fw_build||d.fw_version);if(b.indexOf('dirty')>=0)v.style.color='var(--orange)';}}setLed('can',d.can_ok?'green':'blue');if(!d.gyro_ok)setLed('gyro','');else setLed('gyro',d.gyro_state===2?'yellow':'green');setLed('gps',d.gps_valid?'green':'');if(d.gyro_threshold!=null){gThr=d.gyro_threshold;var inp=document.getElementById('gyro-thr-input');if(inp)inp.value=gThr.toFixed(3);}
 if(d.gyro_mot_thr!=null){var inp2=document.getElementById('gyro-mot-input');if(inp2){inp2.value=d.gyro_mot_thr;var lbl=document.getElementById('gyro-mot-mg');if(lbl)lbl.textContent='\u00d7 32 = '+(d.gyro_mot_thr*32)+'mg';}}setBatt(d.batt_pct??-1,d.charging??false,d.vbus_in??false);updateModem(d.modem_sig??-1,d.modem_op??'',d.modem_sim??false,d.modem_ok??false);compassUpdate(d);}catch(e){}}
 fetchStatus();
 var _stTimer=setInterval(fetchStatus,6000);
@@ -405,7 +405,7 @@ function renderWifiNets(nets) {
 // ── ELM Log ───────────────────────────────────────────────
 async function loadElmLog() {
   try {
-    var r = await fetch('/download-elm-log');
+    var r = await fetch('/elm-log-tail?n=6000');
     var txt = await r.text();
     var el = document.getElementById('elm-log');
     var lines = txt.trim().split('\n').slice(-30).reverse();
@@ -428,7 +428,7 @@ async function loadSysLog() {
   try {
     var ctrl = new AbortController();
     var tid  = setTimeout(function(){ ctrl.abort(); }, 8000);
-    var r = await fetch('/download-sys-log', {signal: ctrl.signal});
+    var r = await fetch('/sys-log-tail?n=10000', {signal: ctrl.signal});
     clearTimeout(tid);
     var txt = await r.text();
     if (!txt.trim() || txt.startsWith('# Sys')) { el.textContent = window.t('dbg.syslog_empty'); return; }
@@ -744,8 +744,9 @@ async function loadLogConfig() {
   try {
     var d = await (await fetch('/api/config')).json();
     _logCan = d.log_can === true;
-    document.getElementById('sec-elm-log').style.display = _logCan ? '' : 'none';
-    if (_logCan && !_tiEl)  { loadElmLog();  _tiEl = setInterval(loadElmLog, 15000); }
+    document.getElementById('sec-elm-log').style.display = '';
+    if (!_logCan) { document.getElementById('elm-log').textContent = t('dbg.elm_off'); return; }
+    if (!_tiEl)  { loadElmLog();  _tiEl = setInterval(loadElmLog, 15000); }
   } catch(e) {}
 }
 

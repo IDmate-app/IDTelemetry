@@ -164,6 +164,7 @@
   "dbg.wifi_hidden": "(versteckt)",
   "dbg.elm_title": "ELM327 / ABRP Log",
   "dbg.elm_delete": "\u2715 L\u00f6schen",
+  "dbg.elm_off": "ELM-Log ist ausgeschaltet — in der Konfiguration „CAN / ELM Log“ aktivieren.",
   "dbg.elm_empty": "Leer",
   "dbg.elm_confirm": "ELM Log l\u00f6schen?",
   "dbg.elm_deleted": "ELM Log gel\u00f6scht",

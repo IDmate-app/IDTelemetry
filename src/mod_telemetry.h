@@ -45,6 +45,11 @@ enum TelemField {
     // Sehr langsam (60 s)
     TELEM_ODOMETER,
     TELEM_BATT_DEVICE,
+    // Firmware 1.5.0: Werte, die ABRP vom Stick liest (ROADMAP 2).
+    // NUR hinten anhaengen: Slot-Layout und Payload-Bits haengen an der Reihenfolge.
+    TELEM_SOE,            // Energieinhalt laut BMS (kWh), DID 0x0364
+    TELEM_HVAC_KW,        // Klimaleistung (kW), DID 0x2613 (Vermutung)
+    TELEM_CABIN_TEMP,     // Innentemperatur (°C), DID 0x2613 (Vermutung)
     TELEM_FIELD_COUNT
 };
 
@@ -104,4 +109,12 @@ const char* telem_preview_rows(int max_rows = 8);
 
 // ELM327-Brücke: UDS-Antwort-Bytes (nach 0x62+DID) in Telemetrie-Cache schreiben
 // Wird von mod_elm327 aufgerufen wenn ABRP eine erfolgreiche CAN-Antwort bekommt
-void telem_feed_did(uint16_t did, const uint8_t* data, int data_len);
+void telem_feed_did(uint16_t did, const uint8_t* data, int data_len, uint32_t req_id = 0);
+
+// Rohantwort einer DID, deren Formel noch offen ist (0x0364, 0x2613).
+// Gefuellt vom eigenen Poll und vom ABRP-CAN-Fallback; ABRP wird daraus
+// beantwortet, solange sie frisch ist. req_id = ECU, an die gefragt wurde.
+bool telem_get_raw_did(uint32_t req_id, uint16_t did, uint8_t* out, int max_out,
+                       int* out_len, uint32_t* out_age_ms);
+// "0364=62 03 64 ..; 2613=.." fuer /status, Serial und Syslog
+void telem_raw_did_str(char* buf, int size);

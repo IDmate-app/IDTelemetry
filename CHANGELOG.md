@@ -3,6 +3,25 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.5.0] – unreleased (branch `next-1.5`, not flashed yet)
+
+### Added
+
+- **Build ID**: `git describe` is compiled in as `FW_BUILD` (`scripts/build_id.py`). Shown in the web UI header, `/status` (`fw_build`, `fw_variant`), the boot syslog and the serial command `version`. `-dirty` = built from uncommitted code.
+- **Info telegram** `0x10` once per MQTT connection (LTE and WiFi): `{"fw","build","var","pv","bits"}`. IDmate 1.2.255+ shows the stick firmware; older servers drop it.
+- **New fields** SoE (bit 20, kWh), HVAC power (bit 21, kW), cabin temperature (bit 22, °C), appended to the v2 value telegram (version byte stays `0x02`; older servers ignore the tail).
+- The stick polls `0x0364` (ECU FC0076) and `0x2613` (ECU 746) itself every 30 s. Formulas are still open: raw bytes go to the syslog (`RAWDID`, every 5 min), `/status` (`raw_dids`) and the serial command `rawdid`. ABRP is answered from these raw bytes while they are fresh.
+- `/sys-log-tail` and `/elm-log-tail` (`?n=` bytes, max 16 KB) for the debug page preview.
+
+### Fixed
+
+- **Logs vanished**: `/download-sys-log` and `/download-elm-log` renamed the log, so every call (and the debug page preview every 15–20 s) emptied it. The download now copies; the preview reads only the end of the file.
+- The debug page says when the ELM log is switched off instead of hiding the section.
+
+### Changed
+
+- Ring-buffer slot layout: valid flags as a bitmask (room for 29 fields). Slots written by 1.4.x and earlier are still read, so an update keeps the unsent backlog. The RAM row file across deep sleep is discarded once on the update.
+
 ## [1.4.0] – 2026-10-28
 
 ### Added
