@@ -3,6 +3,12 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.1] – 2026-11-06
+
+### Fixed
+
+- **No readings while charging**: the stick talked to the car only with VBUS and a shake in the last 30 s (VW-alarm guard). At a charger nothing moves, so it went quiet although the car was awake. Now it keeps reading while the car itself reports "charging" (0x7448, at most 90 s old) and the bus answered in the last 30 s. When charging ends or the bus goes quiet, the old rule applies again at once, so the stick does not keep the car awake. The charging state (0x7448) is now polled every 15 s instead of 60 s, so a charge is caught within the 30 s after the last movement.
+
 ## [1.6.0] – 2026-11-06
 
 **One-time USB flash needed** (new partition table). After that, updates go through the stick's configuration page.

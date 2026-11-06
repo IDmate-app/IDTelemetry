@@ -1,6 +1,6 @@
 {
   "name": "IDTelemetry — Lite (plain ESP32-S3)",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "builds": [
@@ -8,19 +8,19 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.0/idtelemetry-lite-1.6.0.bootloader.bin",
+          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.1/idtelemetry-lite-1.6.1.bootloader.bin",
           "offset": 0
         },
         {
-          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.0/idtelemetry-lite-1.6.0.partitions.bin",
+          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.1/idtelemetry-lite-1.6.1.partitions.bin",
           "offset": 32768
         },
         {
-          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.0/idtelemetry-boot_app0-1.6.0.bin",
+          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.1/idtelemetry-boot_app0-1.6.1.bin",
           "offset": 57344
         },
         {
-          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.0/idtelemetry-lite-1.6.0.bin",
+          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.1/idtelemetry-lite-1.6.1.bin",
           "offset": 65536
         }
       ]
