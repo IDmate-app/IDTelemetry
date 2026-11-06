@@ -376,12 +376,10 @@ struct CanQuerySlot {
     uint32_t last_ms;
 };
 
-// ── DIDs mit noch offener Formel (ROADMAP 2) ─────────────────
-// ABRP fragt 0x0364 (ECU FC0076) und 0x2613 (ECU 746). Was genau drinsteht,
-// ist noch nicht entschluesselt. Bis dahin: Rohbytes cachen (ABRP wird daraus
-// beantwortet), alle 5 min ins Syslog, in /status und per Serial "rawdid".
-// Formel gefunden → unten in decode_new_did() eintragen, fertig: Feld,
-// Payload-Bit (20-22) und IDmate sind schon vorbereitet.
+// ── Zusatz-DIDs 0x0364 (FC0076), 0x2613 (746), 0x2AB8 (710) ──
+// Rohbytes werden gecacht (ABRP wird daraus beantwortet), alle 5 min ins
+// Syslog, in /status und per Serial "rawdid". Seit 1.6.7 dekodiert
+// (decode_new_did): Nebenverbraucher kW, Innentemperatur, Energieinhalt.
 struct RawDid {
     uint32_t req_id;
     uint16_t did;
@@ -538,21 +536,36 @@ void telem_cal_str(char* buf, int size) {
 }
 
 // Formeln fuer die neuen Felder. A = d[0], B = d[1], ... (ohne 62 + DID).
-// TODO (Ladepause): aus ELM-Log/Syslog-Rohbytes + ABRP-Screenshot ableiten.
-// Vorlage (Beispiel, NICHT verifiziert):
-//   float v = ((d[0] << 8) | d[1]) / 10.f;  // A:B / 10 → kWh
-//   telem_update(TELEM_SOE, v, plausible(v, 0.f, 120.f));
+// 1.6.7: aus der offenen Fahrzeugdatenbank OBDb (Volkswagen-ID3, signalsets
+// v3) und an den Rohbytes vom 2026-11-06 geprueft:
+//   2AB8 C:D x 25 Wh  → 54,5 kWh bei SoC 65,9 % und 51,75 kWh bei 62,4 %,
+//                       beides ≈ 83 kWh bei 100 % (82-kWh-Akku) — passt.
+//   0364 A:B /10 kW (vorzeichenbehaftet) "HV auxiliary power" — alle
+//                       HV-Nebenverbraucher (Heizung, Klima, 12-V-Wandler);
+//                       Log: 0,4 … 1,6 kW.
+//   2613 A:B /10 °C (vorzeichenbehaftet) "Temperature, interior".
 static void decode_new_did(uint16_t did, const uint8_t* d, int n) {
-    (void)d; (void)n;
     switch (did) {
-        case 0x0364:  // SoE (kWh)             → TELEM_SOE,        plausible 0 … 120
+        case 0x0364:
+            if (n >= 2) {
+                float v = (int16_t)(((uint16_t)d[0] << 8) | d[1]) / 10.f;
+                telem_update(TELEM_HVAC_KW, v, plausible(v, -2.f, 30.f));
+            }
             break;
-        case 0x2613:  // Innentemp. (°C) / Klima (kW) → TELEM_CABIN_TEMP -40 … 80,
-            break;    //                            TELEM_HVAC_KW    -1 … 15
-        case 0x2AB8:  // 8 Bytes, A:B:C:D steigt/faellt mit dem Energieinhalt (Log 2026-11-06)
-            if (n >= 4) cal_2ab8(((uint32_t)d[0] << 24) | ((uint32_t)d[1] << 16) |
-                                 ((uint32_t)d[2] << 8) | d[3]);
-            break;    // → TELEM_SOE, sobald der Faktor feststeht
+        case 0x2613:
+            if (n >= 2) {
+                float v = (int16_t)(((uint16_t)d[0] << 8) | d[1]) / 10.f;
+                telem_update(TELEM_CABIN_TEMP, v, plausible(v, -40.f, 80.f));
+            }
+            break;
+        case 0x2AB8:
+            if (n >= 4) {
+                cal_2ab8(((uint32_t)d[0] << 24) | ((uint32_t)d[1] << 16) |
+                         ((uint32_t)d[2] << 8) | d[3]);   // Gegenprobe im Syslog (CAL2AB8)
+                float v = (((uint16_t)d[2] << 8) | d[3]) * 25.f / 1000.f;
+                telem_update(TELEM_SOE, v, plausible(v, 0.f, 120.f));
+            }
+            break;
         default:
             break;
     }

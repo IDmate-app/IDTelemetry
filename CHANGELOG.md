@@ -3,6 +3,15 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.7] – 2026-11-06
+
+### Added
+
+- **Energy content, auxiliary power and cabin temperature are now decoded and sent** (payload bits 20–22, already understood by IDmate). Formulas from the open vehicle database OBDb (Volkswagen-ID3) and checked against this car's raw bytes:
+  - `2AB8` (ECU 710): bytes C:D × 25 Wh = energy content (kWh). Check: 54.5 kWh at SoC 65.9 % and 51.75 kWh at 62.4 %, both ≈ 83 kWh at 100 %.
+  - `0364` (ECU FC0076): signed A:B / 10 = power of all HV auxiliary consumers (heater, A/C, 12 V converter), kW. Log: 0.4–1.6 kW.
+  - `2613` (ECU 746): signed A:B / 10 = interior temperature, °C.
+
 ## [1.6.6] – 2026-11-06
 
 ### Fixed
