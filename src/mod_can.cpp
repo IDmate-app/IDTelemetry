@@ -5,13 +5,40 @@
 #include "mod_pmu.h"
 #include "mod_gyro.h"
 #include "config.h"
+#include "mod_telemetry.h"
 
 // CAN TX nur bei VBUS (Auto an) + Gyro-Bewegung innerhalb GYRO_HOLD_MS
+// Senden nur, wenn das Auto sicher wach ist (VW-Alarm: ein schlafendes Auto
+// darf nicht per Diagnose geweckt werden).
+//   1. VBUS + Erschuetterung in den letzten GYRO_HOLD_MS — jemand ist im Auto.
+//   2. 1.6.1: Laden — das Auto meldet "laedt" (0x7448, hoechstens 90 s alt)
+//      UND der Bus hat in den letzten 30 s geantwortet. Beim Laden ist das
+//      Auto wach, steht aber still; vorher schwieg der Stick nach 30 s.
+//      Endet die Ladung (0x7448 → 0) oder schweigt der Bus, gilt sofort
+//      wieder Regel 1 — der Stick haelt das Auto nach dem Laden nicht wach.
+static volatile uint32_t s_last_rx_ok_ms = 0;   // letzte Antwort einer Anfrage
+
+static bool charge_hold() {
+    float v = 0; uint32_t age = 0;
+    if (!telem_get_latest(TELEM_IS_CHARGING, &v, &age)) return false;
+    if (v < 0.5f || age > 90000UL) return false;
+    uint32_t rx = s_last_rx_ok_ms;
+    return rx != 0 && (millis() - rx) < 30000UL;
+}
+
 static bool can_tx_allowed() {
     if (!pmu_is_vbus_in()) return false;
     uint32_t last = gyro_last_shake_ms();
-    if (last == 0) return false;
-    return (millis() - last) < GYRO_HOLD_MS;
+    bool moving = last != 0 && (millis() - last) < GYRO_HOLD_MS;
+    if (moving) return true;
+    static bool s_hold_was = false;
+    bool hold = charge_hold();
+    if (hold != s_hold_was) {
+        s_hold_was = hold;
+        syslog("CAN", hold ? "Laden erkannt — lese ohne Bewegung weiter"
+                           : "Laden beendet oder Bus still — CAN schweigt bis zur naechsten Bewegung");
+    }
+    return hold;
 }
 
 // ============================================================
@@ -397,6 +424,7 @@ int can_isotp_query(uint32_t tx_id, uint32_t rx_id,
     if (!can_lock(timeout_ms + 200)) return -1;
     int result = isotp_query_inner(tx_id, rx_id, req, req_len, resp, max_resp, timeout_ms);
     can_unlock();
+    if (result > 0) s_last_rx_ok_ms = millis();
     return result;
 }
 
@@ -872,6 +900,7 @@ int can_isotp_query_elm(uint32_t tx_id, uint32_t rx_id,
         }
     }
 
+    if (frame_count > 0) s_last_rx_ok_ms = millis();
     return frame_count;
 }
 

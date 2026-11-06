@@ -663,7 +663,7 @@ static CanQuerySlot s_can_schedule[] = {
     { ECU_FC0076_REQ, ECU_FC0076_RESP, 0x295A, 60000, 0 },   // [8]  Odometer
     { ECU_710_REQ,    ECU_710_RESP,    0x2AB2, 60000, 0 },    // [9]  Kapazität
     { ECU_FC007B_REQ, ECU_FC007B_RESP, 0x1E32, 60000, 0 },   // [10] kWh geladen
-    { ECU_FC007B_REQ, ECU_FC007B_RESP, 0x7448, 60000, 0 },   // [11] Ladestatus
+    { ECU_FC007B_REQ, ECU_FC007B_RESP, 0x7448, 15000, 0 },   // [11] Ladestatus (15 s: haelt das Lesen beim Laden, mod_can)
     // ── 1.5.0 (ROADMAP 2): fragt ABRP ohnehin; Formel noch offen → Rohbytes ──
     { ECU_FC0076_REQ, ECU_FC0076_RESP, 0x0364, 30000, 0 },   // [12] SoE (Vermutung)
     { ECU_746_REQ,    ECU_746_RESP,    0x2613, 30000, 0 },   // [13] Klima/Innen (Vermutung)
