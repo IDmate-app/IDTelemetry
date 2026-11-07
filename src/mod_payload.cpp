@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "mod_telemetry.h"
 #include "mod_config.h"
+#include "mod_rcfg.h"
 #include "mod_pmu.h"
 #include "secrets.h"
 #include <aes/esp_aes.h>
@@ -238,8 +239,9 @@ int payload_encode(const TelemetryRow& row, uint8_t* out, int out_size) {
 int payload_encode_info(uint8_t* out, int out_size) {
     char json[128];
     int n = snprintf(json, sizeof(json),
-                     "{\"fw\":\"%s\",\"build\":\"%s\",\"var\":\"%s\",\"pv\":%d,\"bits\":%d}",
-                     FW_VERSION, FW_BUILD, FW_VARIANT, PAYLOAD_VERSION_VALUES, PAYLOAD_BITS);
+                     "{\"fw\":\"%s\",\"build\":\"%s\",\"var\":\"%s\",\"pv\":%d,\"bits\":%d,\"odo\":%.0f}",
+                     FW_VERSION, FW_BUILD, FW_VARIANT, PAYLOAD_VERSION_VALUES, PAYLOAD_BITS,
+                     rcfg_odo_offset());   // 1.6.10: km-Versatz, den der Stick schon aufschlaegt
     if (n <= 0 || n >= (int)sizeof(json)) return 0;
     return encrypt_frame(PAYLOAD_VERSION_INFO, (const uint8_t*)json, n, out, out_size);
 }

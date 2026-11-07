@@ -127,14 +127,16 @@ float rcfg_abrp_soc(float can) {
     return v;
 }
 
-float rcfg_abrp_odo(float km) {
-    if (!cfg_abrp_corr()) return km;
+float rcfg_odo_offset() {
     bool has; float o;
     portENTER_CRITICAL(&s_mux);
     has = s_has_odo; o = s_odo;
     portEXIT_CRITICAL(&s_mux);
-    return has ? km + o : km;
+    return has ? o : 0.f;
 }
+
+// 1.6.10: unabhaengig vom Schalter — der km-Stand ist ueberall der des Tachos.
+float rcfg_abrp_odo(float km) { return km + rcfg_odo_offset(); }
 
 void rcfg_status_json(JsonDocument& doc) {
     portENTER_CRITICAL(&s_mux);
