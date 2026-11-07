@@ -3,6 +3,7 @@
 #include "mod_telem_store.h"
 #include "mod_telemetry.h"
 #include "mod_payload.h"
+#include "mod_rcfg.h"
 #include "mod_sleep.h"
 #include <Arduino.h>
 #include <WiFi.h>
@@ -57,6 +58,17 @@ static const uint32_t DRAIN_GAP_MS         = 50;     // pause between rows
 // UseInternalTask::NO → kein eigener Lib-Task; wir pumpen loop() selbst im
 // Drain-Task und können so synchron auf das PUBACK warten (FIXES B.4).
 static espMqttClient s_mqtt(espMqttClientTypes::UseInternalTask::NO);
+static char s_cfg_topic[96] = "";      // 1.6.8: <prefix>/cfg
+
+// 1.6.8: Nachricht auf <prefix>/cfg (retained) → gelernte Korrekturen.
+static void on_mqtt_message(const espMqttClientTypes::MessageProperties&, const char* topic,
+                            const uint8_t* payload, size_t len, size_t index, size_t total) {
+    static char buf[300];
+    if (!s_cfg_topic[0] || strcmp(topic, s_cfg_topic) != 0) return;
+    if (total >= sizeof(buf) || index + len > total) return;
+    memcpy(buf + index, payload, len);
+    if (index + len == total) { buf[total] = 0; rcfg_apply_b64(buf, total); }
+}
 static volatile uint16_t s_mqtt_acked_pid = 0;   // packetId des letzten PUBACK
 static void on_mqtt_publish(uint16_t packetId) { s_mqtt_acked_pid = packetId; }
 
@@ -226,6 +238,20 @@ static bool mqtt_publish_payload(const char* host, uint16_t port, const char* to
         char m[80]; snprintf(m, sizeof(m), "MQTT-WiFi connected (QoS1): %s:%u", host, port);
         syslog("WIFI_UP", m);
 
+        // 1.6.8: gelernte Korrekturen von IDmate (retained auf <prefix>/cfg).
+        // Das Topic der Werte endet auf "/data"; daneben liegt "/cfg".
+        {
+            const char* slash = strrchr(topic, '/');
+            size_t pre = slash ? (size_t)(slash - topic) : strlen(topic);
+            if (pre + 5 < sizeof(s_cfg_topic)) {
+                memcpy(s_cfg_topic, topic, pre);
+                strcpy(s_cfg_topic + pre, "/cfg");
+                s_mqtt.subscribe(s_cfg_topic, 1);
+                uint32_t t1 = millis();
+                while (s_mqtt.connected() && millis() - t1 < 2000) { s_mqtt.loop(); vTaskDelay(pdMS_TO_TICKS(20)); }
+            }
+        }
+
         // Info-Telegramm (Firmware/Build/Format) einmal pro Verbindung, gleiches
         // Topic wie die Werte. QoS 0: geht es verloren, kommt es beim naechsten
         // Verbindungsaufbau wieder; die Row-Uebertragung wartet nicht darauf.
@@ -302,6 +328,7 @@ static void wifi_upload_task(void*) {
     s_task_running = true;
     payload_init_key();
     s_mqtt.onPublish(on_mqtt_publish);   // FIXES B.4: PUBACK-Tracking (einmalig)
+    s_mqtt.onMessage(on_mqtt_message);   // 1.6.8: Korrekturen von IDmate
 
     while (!g_shutdown) {
         // Handle one-shot test request from the Web UI ──────

@@ -2,6 +2,7 @@
 #include "mod_web.h"
 #include "mod_telem_store.h"
 #include "mod_payload.h"
+#include "mod_rcfg.h"
 #include "mod_can.h"
 #include "mod_logs.h"
 #include "mod_rtc.h"
@@ -232,6 +233,7 @@ void web_init() {
         }
         ota_status_json(doc);   // ota_possible, ota_slot, ota_other_build
         doc["aes_example"]   = payload_key_is_example();      // 1.6.3: kein eigener Schluessel
+        rcfg_status_json(doc);                                 // 1.6.8: rcfg_on, rcfg_odo, rcfg_soc
         doc["resend_status"] = telem_store_resend_status();
         doc["rows_pending"]  = telem_store_pending();
         doc["uptime"]      = millis();

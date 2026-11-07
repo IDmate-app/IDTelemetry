@@ -204,6 +204,29 @@ static int encrypt_frame(uint8_t version, const uint8_t* plain, int plain_len,
     return (ret == 0) ? total : 0;
 }
 
+// 1.6.8: Gegenstueck fuer Nachrichten von IDmate (Konfiguration). Gleicher
+// Schluessel, gleicher Rahmen. -1 = falsche Version, Laenge, Schluessel oder
+// Auffuellung. Mit dem Beispielschluessel wird nichts angenommen.
+int payload_decrypt(uint8_t version, const uint8_t* in, int in_len, uint8_t* out, int out_size) {
+    if (!s_aes_ready) payload_init_key();
+    if (s_key_example) return -1;
+    if (!in || in_len < 33 || in[0] != version || ((in_len - 17) % 16) != 0) return -1;
+    int clen = in_len - 17;
+    if (clen > out_size) return -1;
+    esp_aes_context ctx;
+    esp_aes_init(&ctx);
+    esp_aes_setkey(&ctx, s_aes_key, 256);
+    uint8_t iv[16];
+    memcpy(iv, in + 1, 16);
+    int ret = esp_aes_crypt_cbc(&ctx, ESP_AES_DECRYPT, clen, iv, in + 17, out);
+    esp_aes_free(&ctx);
+    if (ret != 0) return -1;
+    uint8_t pad = out[clen - 1];
+    if (pad < 1 || pad > 16) return -1;
+    for (int i = 0; i < pad; i++) if (out[clen - 1 - i] != pad) return -1;
+    return clen - pad;
+}
+
 int payload_encode(const TelemetryRow& row, uint8_t* out, int out_size) {
     uint8_t plain[96];
     int plain_len = build_plaintext(row, plain, sizeof(plain));

@@ -5,6 +5,7 @@
 #include "mod_logs.h"
 #include "mod_telemetry.h"
 #include "mod_config.h"
+#include "mod_rcfg.h"
 
 // ELM TX/RX ins Log schreiben
 static void elm_log_rx(uint32_t id, uint8_t* data, uint8_t len, const char* label) {
@@ -365,6 +366,10 @@ static bool handle_uds_did(uint16_t did, String& response) {
         if (DID_CACHE_MAP[i].did != did) continue;
         float val; uint32_t age_ms;
         bool valid = telem_get_latest(DID_CACHE_MAP[i].field, &val, &age_ms);
+        // 1.6.8: ABRP bekommt den SoC und km-Stand wie im Auto-Display
+        // (von IDmate gelernt, mod_rcfg). Nur echte Werte, keine Standby-Defaults.
+        if (valid && did == 0x028C) val = rcfg_abrp_soc(val);
+        if (valid && did == 0x295A) val = rcfg_abrp_odo(val);
         if (!valid) {
             if (!cfg_ble_standby()) {
                 response = "NO DATA";

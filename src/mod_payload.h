@@ -85,3 +85,7 @@ void payload_key_changed();
 // true = der Stick hat nur den Beispielschluessel (alles 0). Dann wird nichts
 // gesendet (payload_encode*() liefert 0), die Zeilen bleiben im Puffer.
 bool payload_key_is_example();
+
+// 1.6.8: Rahmen von IDmate entschluesseln ([version][IV16][AES-CBC PKCS7]).
+// Laenge des Klartexts oder -1.
+int payload_decrypt(uint8_t version, const uint8_t* in, int in_len, uint8_t* out, int out_size);
