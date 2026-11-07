@@ -68,7 +68,7 @@
   "cfg.ble_title": "BLE / ABRP",
   "cfg.ble_standby": "Send standby defaults",
   "cfg.ble_hint": "When enabled, ABRP receives plausible standby values (0 km/h, 80% SoC etc.) even without a CAN connection and can pair. When disabled: ABRP gets \"NO DATA\" if there is no CAN.",
-  "cfg.abrp_corr": "ABRP gets SoC and odometer as shown in the car",
+  "cfg.abrp_corr": "ABRP gets the SoC as shown in the car",
   "cfg.rcfg_none": "Nothing learned from IDmate yet (dashboard \u2192 BMS learning).",
   "cfg.rcfg_from": "Learned by IDmate: {0}",
   "cfg.rcfg_soc": "display SoC = {0}",

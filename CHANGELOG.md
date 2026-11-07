@@ -3,6 +3,12 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.10] – 2026-11-07
+
+### Changed
+
+- **Dashboard odometer everywhere**: the km offset from IDmate (fixed, the dashboard reads ~5 km more than CAN) is now added to the rows sent to IDmate too, not only to the answers to ABRP. The info telegram reports the offset in force (`"odo"`), so IDmate knows from when its km are dashboard km (the charge print stops adding its own +5 km from then on; needs IDmate 1.2.269). The switch on the configuration page now only covers the display SoC for ABRP.
+
 ## [1.6.9] – 2026-11-07
 
 ### Fixed

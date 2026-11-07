@@ -68,7 +68,7 @@
   "cfg.ble_title": "BLE / ABRP",
   "cfg.ble_standby": "Standby-Defaults senden",
   "cfg.ble_hint": "Wenn aktiv, bekommt ABRP auch ohne CAN-Verbindung plausible Standwerte (0 km/h, 80% SoC etc.) und kann sich verbinden. Deaktiviert: ABRP bekommt \"NO DATA\" wenn kein CAN.",
-  "cfg.abrp_corr": "ABRP bekommt SoC und km-Stand wie im Auto",
+  "cfg.abrp_corr": "ABRP bekommt den SoC wie im Auto",
   "cfg.rcfg_none": "Noch nichts von IDmate gelernt (Dashboard \u2192 BMS lernen).",
   "cfg.rcfg_from": "Von IDmate gelernt: {0}",
   "cfg.rcfg_soc": "Anzeige-SoC = {0}",

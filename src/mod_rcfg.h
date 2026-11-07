@@ -12,12 +12,14 @@
 //  Anzeige-SoC = c0 + c1*CAN + c2*(Akku-Temp - 20) + c3*(Aussen-Temp - 10),
 //  Terme in der Reihenfolge von "t". Leeres Objekt = Korrekturen aus.
 //
-//  Angewandt NUR auf die Antworten an ABRP (BLE/ELM). Was der Stick an
-//  IDmate sendet, bleibt roh — das Lernen braucht die CAN-Werte.
+//  Anzeige-SoC: NUR fuer ABRP (BLE/ELM) — IDmate lernt aus dem rohen SoC.
+//  km-Versatz (1.6.10): fuer alles, IDmate und ABRP bekommen den Tacho-km-
+//  Stand. Der Wert ist fest (IDmate ODO_OFFSET_KM), nicht gelernt.
 // ============================================================
 
 void  rcfg_init();                              // gespeicherten Stand aus NVS
 bool  rcfg_apply_b64(const char* b64, size_t len);   // Nachricht von <topic>/cfg
 float rcfg_abrp_soc(float can_soc);             // Anzeige-SoC fuer ABRP (oder unveraendert)
 float rcfg_abrp_odo(float can_km);              // Tacho-km fuer ABRP (oder unveraendert)
+float rcfg_odo_offset();                        // km-Versatz (0 = keiner)
 void  rcfg_status_json(JsonDocument& doc);      // fuer /status

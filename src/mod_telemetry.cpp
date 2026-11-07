@@ -1,5 +1,6 @@
 #include "mod_telemetry.h"
 #include "mod_telem_store.h"
+#include "mod_rcfg.h"
 #include "mod_sleep.h"
 #include "shared.h"
 #include "mod_modem.h"
@@ -317,6 +318,10 @@ static void row_try_capture() {
             s_prev_has[f] = true;
         }
     }
+
+    // 1.6.10: km-Stand wie im Tacho (Versatz von IDmate, mod_rcfg) — fuer
+    // IDmate und ABRP. Erst nach dem min_delta-Vergleich, der rechnet roh.
+    if (row.valid[TELEM_ODOMETER]) row.values[TELEM_ODOMETER] += rcfg_odo_offset();
 
     s_row_buf[s_row_head] = row;
     s_row_head = (uint16_t)((s_row_head + 1) % TELEM_ROW_BUF_SIZE);
