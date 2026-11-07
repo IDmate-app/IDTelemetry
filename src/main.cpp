@@ -47,6 +47,7 @@
 #include "mod_wifi_upload.h"
 #include "mod_config.h"
 #include "mod_rcfg.h"
+#include "mod_watch.h"
 #include <NimBLEDevice.h>
 
 AsyncWebServer    server(80);
@@ -209,6 +210,7 @@ void setup() {
     web_init();
     logs_init();
     ota_boot_log();
+    watch_boot_log();   // 1.6.11: was lief beim letzten Watchdog-Neustart
     { char m[64]; snprintf(m, sizeof(m), "AP: %s · http://192.168.4.1", cfg_ap_ssid()); syslog("WEB", m); }
     sleep_log_wakeup_syslog();  // Wake-Log jetzt senden (logs_init muss vorher laufen)
     ble_web_routes_init();

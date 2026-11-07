@@ -1,6 +1,6 @@
 {
   "name": "IDTelemetry — Full (T-SIM7080G-S3)",
-  "version": "1.6.10",
+  "version": "1.6.11",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "builds": [
@@ -8,19 +8,19 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.10/idtelemetry-full-1.6.10.bootloader.bin",
+          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.11/idtelemetry-full-1.6.11.bootloader.bin",
           "offset": 0
         },
         {
-          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.10/idtelemetry-full-1.6.10.partitions.bin",
+          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.11/idtelemetry-full-1.6.11.partitions.bin",
           "offset": 32768
         },
         {
-          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.10/idtelemetry-boot_app0-1.6.10.bin",
+          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.11/idtelemetry-boot_app0-1.6.11.bin",
           "offset": 57344
         },
         {
-          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.10/idtelemetry-full-1.6.10.bin",
+          "path": "https://github.com/IDmate-app/IDTelemetry/releases/download/v1.6.11/idtelemetry-full-1.6.11.bin",
           "offset": 65536
         }
       ]

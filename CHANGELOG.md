@@ -3,6 +3,12 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.11] – 2026-11-07
+
+### Added
+
+- **Which task ran when the watchdog fired**: on a task-watchdog reset the stick now notes the task running on each core (RTC memory, survives the reset) and writes it to the syslog after the restart, e.g. `WATCH Task-Watchdog nach 512s Laufzeit: Kern 0 lief "ipc0", Kern 1 "async_tcp"`. Diagnosis only, no change in behaviour (step 1 of the watch tower). Trigger: the crash of 2026-11-06 15:04 during a charging stop, where only the watchdog itself was visible in the backtrace.
+
 ## [1.6.10] – 2026-11-07
 
 ### Changed
