@@ -3,6 +3,12 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.8] – 2026-11-07
+
+### Added
+
+- **ABRP gets the SoC and odometer as shown in the car.** IDmate learns both with "BMS lernen" (display SoC as a function of the CAN SoC, optionally with temperatures; odometer offset from the dashboard km typed in once) and sends them to the stick, retained on `<topic>/cfg`, encrypted with the same AES key as the telegrams. The stick applies them only to its Bluetooth answers to ABRP (DID 028C SoC, 295A odometer); what it sends to IDmate stays raw, the learning needs it. Received over LTE and WiFi, stored in NVS, shown on the configuration page (BLE / ABRP), switchable there ("ABRP bekommt SoC und km-Stand wie im Auto", default on). Needs IDmate 1.2.267.
+
 ## [1.6.7] – 2026-11-06
 
 ### Added

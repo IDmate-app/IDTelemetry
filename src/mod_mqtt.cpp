@@ -6,6 +6,7 @@
 #include <TinyGsmClient.h>
 
 #include "mod_mqtt.h"
+#include "mod_rcfg.h"
 #include "mod_config.h"
 #include "mod_pmu.h"
 #include "mod_logs.h"
@@ -32,6 +33,7 @@ static bool     s_last_pub_ok  = false;
 static uint32_t s_last_pub_ms  = 0;
 static uint16_t s_pub_count    = 0;
 static char     s_last_ack[128] = "";
+static char     s_cfg_topic[96] = "";   // 1.6.8: Korrekturen von IDmate (retained)
 static char     s_sub_topic[80] = "";   // Subscribe-Topic für Server-ACK
 
 // ---- AT-Hilfe (wie in mod_modem) ----
@@ -87,6 +89,7 @@ void mqtt_configure() {
 
     // Subscribe-Topic vorbereiten
     snprintf(s_sub_topic, sizeof(s_sub_topic), "%s/ack", cfg_mqtt_topic());
+    snprintf(s_cfg_topic, sizeof(s_cfg_topic), "%s/cfg", cfg_mqtt_topic());   // 1.6.8
 
     s_configured = true;
 
@@ -152,7 +155,7 @@ bool mqtt_connect() {
     syslog("MQTT", "Verbunden");
 
     // ACK-Topic abonnieren
-    char cmd[96];
+    char cmd[160];
     snprintf(cmd, sizeof(cmd), "+SMSUB=\"%s\",%d", s_sub_topic, MQTT_QOS);
     if (mqtt_at_ok(cmd, 5000L)) {
         char msg[96];
@@ -161,6 +164,15 @@ bool mqtt_connect() {
     }
 
     mqtt_publish_info();
+
+    // 1.6.8: gelernte Korrekturen von IDmate. Retained → der Broker schickt
+    // sie direkt nach dem Abo. Zuletzt abonnieren und kurz zuhoeren, damit
+    // kein anderes AT-Kommando die URC verschluckt.
+    snprintf(cmd, sizeof(cmd), "+SMSUB=\"%s\",1", s_cfg_topic);
+    if (mqtt_at_ok(cmd, 5000L)) {
+        uint32_t t0 = millis();
+        while (millis() - t0 < 2500) { mqtt_poll(); vTaskDelay(pdMS_TO_TICKS(50)); }
+    }
     return true;
 }
 
@@ -285,7 +297,7 @@ void mqtt_poll() {
     // URCs wie +SMSUB: "topic",len,"payload" werden vom TinyGSM-Parser
     // in den Stream-Buffer geschrieben. Wir lesen verfügbare Bytes.
     HardwareSerial& ser = modem_serial();
-    static char urc_buf[256];
+    static char urc_buf[400];
     static int  urc_pos = 0;
 
     while (ser.available()) {
@@ -294,6 +306,13 @@ void mqtt_poll() {
             urc_buf[urc_pos] = '\0';
             // +SMSUB: "topic",len,"payload"
             if (strncmp(urc_buf, "+SMSUB:", 7) == 0) {
+                // Topic = zwischen den ersten beiden Anfuehrungszeichen
+                char topic[96] = "";
+                char* q1 = strchr(urc_buf, '"');
+                char* q2 = q1 ? strchr(q1 + 1, '"') : nullptr;
+                if (q1 && q2 && q2 - q1 - 1 < (int)sizeof(topic)) {
+                    memcpy(topic, q1 + 1, q2 - q1 - 1); topic[q2 - q1 - 1] = '\0';
+                }
                 // Payload extrahieren (nach letztem Anführungszeichen)
                 char* last_q = strrchr(urc_buf, '"');
                 char* first_payload_q = nullptr;
@@ -301,7 +320,10 @@ void mqtt_poll() {
                     // Rückwärts zum öffnenden " des Payloads
                     *last_q = '\0';
                     first_payload_q = strrchr(urc_buf, '"');
-                    if (first_payload_q) {
+                    if (first_payload_q && s_cfg_topic[0] && strcmp(topic, s_cfg_topic) == 0) {
+                        first_payload_q++;
+                        rcfg_apply_b64(first_payload_q, strlen(first_payload_q));   // 1.6.8
+                    } else if (first_payload_q) {
                         first_payload_q++;  // nach dem "
                         strncpy(s_last_ack, first_payload_q, sizeof(s_last_ack) - 1);
                         s_last_ack[sizeof(s_last_ack) - 1] = '\0';

@@ -46,6 +46,7 @@
 #include "mod_ota.h"
 #include "mod_wifi_upload.h"
 #include "mod_config.h"
+#include "mod_rcfg.h"
 #include <NimBLEDevice.h>
 
 AsyncWebServer    server(80);
@@ -202,6 +203,7 @@ void setup() {
 
     // 0. Laufzeit-Config aus NVS laden (vor web_init — softAP braucht SSID/Pass)
     cfg_init();
+    rcfg_init();     // 1.6.8: von IDmate gelernte Korrekturen fuer ABRP
 
     // 1. WiFi + Web
     web_init();
