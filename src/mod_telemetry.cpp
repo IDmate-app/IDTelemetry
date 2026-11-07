@@ -543,7 +543,10 @@ void telem_cal_str(char* buf, int size) {
 //   0364 A:B /10 kW (vorzeichenbehaftet) "HV auxiliary power" — alle
 //                       HV-Nebenverbraucher (Heizung, Klima, 12-V-Wandler);
 //                       Log: 0,4 … 1,6 kW.
-//   2613 A:B /10 °C (vorzeichenbehaftet) "Temperature, interior".
+//   2613 A:B /10 - 10 °C. OBDb sagt /10 ohne Versatz — das gab 31-32 °C bei
+//                       eingestellten 20 °C; laut ABRP liegt der Fuehler 1-2 °C
+//                       ueber der Einstellung → -10 °C (1.6.9, Log 2026-11-06:
+//                       0x0135..0x0143 → 20,9 … 22,3 °C).
 static void decode_new_did(uint16_t did, const uint8_t* d, int n) {
     switch (did) {
         case 0x0364:
@@ -554,7 +557,7 @@ static void decode_new_did(uint16_t did, const uint8_t* d, int n) {
             break;
         case 0x2613:
             if (n >= 2) {
-                float v = (int16_t)(((uint16_t)d[0] << 8) | d[1]) / 10.f;
+                float v = (int16_t)(((uint16_t)d[0] << 8) | d[1]) / 10.f - 10.f;
                 telem_update(TELEM_CABIN_TEMP, v, plausible(v, -40.f, 80.f));
             }
             break;
