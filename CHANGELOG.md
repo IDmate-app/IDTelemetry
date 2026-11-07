@@ -3,6 +3,12 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.6.9] – 2026-11-07
+
+### Fixed
+
+- **Interior temperature 10 °C too high**: the OBDb formula (A:B / 10) gave 31–32 °C with the climate set to 20 °C; ABRP shows the sensor 1–2 °C above the setting. Now A:B / 10 − 10 °C (log of 2026-11-06: 20.9–22.3 °C).
+
 ## [1.6.8] – 2026-11-07
 
 ### Added
