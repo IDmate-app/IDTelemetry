@@ -232,6 +232,20 @@
       <span style="font-size:12px" data-i18n="cfg.abrp_corr">ABRP bekommt den SoC wie im Auto</span>
     </label>
     <div class="hint" id="rcfg-state" data-i18n="cfg.rcfg_none">Noch nichts von IDmate gelernt (Dashboard → BMS lernen).</div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:12px">
+      <input type="checkbox" id="live_ble" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.live_ble">Live-Daten über Bluetooth für Anzeigegeräte</span>
+    </label>
+    <div class="hint" data-i18n="cfg.live_hint">Sendet Ladestand, Tempo, Leistung und Position direkt an ein gekoppeltes Gerät im Auto (z. B. die IDmate-App). Nur nach Kopplung mit dem Code unten; wirkt nach dem Neustart.</div>
+    <div id="live-pair-row" style="display:none;margin-top:8px;font-size:12px">
+      <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="livePair()" data-i18n="cfg.live_pair">Gerät koppeln</button>
+      <span id="live-pair-code" style="display:none;margin-left:12px">
+        <span data-i18n="cfg.live_pin">Kopplungscode</span>:
+        <b id="live_pin" style="font-family:monospace;font-size:15px;letter-spacing:2px"></b>
+        <span id="live_pin_left" style="margin-left:8px;color:var(--text2,#888)"></span>
+      </span>
+      <div class="hint" data-i18n="cfg.live_pair_hint">Der Code gilt 3 Minuten und für einen Versuch. Danach für ein weiteres Gerät erneut drücken.</div>
+    </div>
   </div>
 
   <!-- GPS Quelle + Module -->
@@ -428,6 +442,27 @@ async function testWifi(slot) {
 }
 
 // ── Config laden ─────────────────────────────────────────
+// mod_live: Kopplungsfenster oeffnen. Der Code steht nur in der Antwort, gilt
+// 3 min und fuer einen Versuch; der Stick ersetzt ihn danach von selbst.
+var livePairTimer=null;
+async function livePair(){
+  var box=document.getElementById('live-pair-code'), left=document.getElementById('live_pin_left');
+  clearInterval(livePairTimer);
+  try{
+    var d=await(await fetch('/live-pair',{method:'POST'})).json();
+    if(!d.ok){ box.style.display='none'; toast(t('cfg.live_pair_off'),false); return; }
+    document.getElementById('live_pin').textContent=d.code;
+    box.style.display='';
+    var end=Date.now()+d.seconds*1000;
+    var tick=function(){
+      var s=Math.max(0,Math.round((end-Date.now())/1000));
+      left.textContent=s+' s';
+      if(s<=0){ clearInterval(livePairTimer); box.style.display='none'; }
+    };
+    tick(); livePairTimer=setInterval(tick,1000);
+  }catch(e){ toast(t('cfg.conn_err'),false); }
+}
+
 async function loadConfig(){
   try{
     var d=await(await fetch('/api/config')).json();
@@ -458,6 +493,8 @@ async function loadConfig(){
     document.getElementById('log_can').checked = d.log_can === true;
     document.getElementById('can_vbus').checked = d.can_vbus === true;
     document.getElementById('abrp_corr').checked = d.abrp_corr !== false;
+    document.getElementById('live_ble').checked = d.live_ble === true;
+    document.getElementById('live-pair-row').style.display = d.live_ble === true ? '' : 'none';
     document.getElementById('log_ble').checked = d.log_ble === true;
     document.getElementById('lang').value = d.lang || 'de';
     document.getElementById('save-status').textContent=t('cfg.loaded');
@@ -496,6 +533,7 @@ async function saveConfig(){
     log_can:      document.getElementById('log_can').checked,
     can_vbus:     document.getElementById('can_vbus').checked,
     abrp_corr:    document.getElementById('abrp_corr').checked,
+    live_ble:     document.getElementById('live_ble').checked,
     log_ble:      document.getElementById('log_ble').checked,
     lang:         document.getElementById('lang').value,
   };
@@ -509,6 +547,7 @@ async function saveConfig(){
     if(d.ok){
       toast(t('cfg.saved'));
       document.getElementById('save-status').textContent=t('cfg.saved_status');
+      loadConfig();   // zeigt u. a. den Knopf zum Koppeln
     }else{
       toast(t('cfg.save_err'),false);
     }

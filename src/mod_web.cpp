@@ -3,6 +3,7 @@
 #include "mod_telem_store.h"
 #include "mod_payload.h"
 #include "mod_rcfg.h"
+#include "mod_live.h"
 #include "mod_can.h"
 #include "mod_logs.h"
 #include "mod_rtc.h"
@@ -207,6 +208,16 @@ void web_init() {
         esp_restart();
     });
 
+    // mod_live: Kopplungsfenster oeffnen. Der Code steht nur in dieser Antwort,
+    // gilt LIVE_PAIR_WINDOW_S Sekunden und fuer einen Versuch.
+    server.on("/live-pair", HTTP_POST, [](AsyncWebServerRequest* r) {
+        uint32_t code = live_pair_open();
+        char b[64];
+        if (code) snprintf(b, sizeof(b), "{\"ok\":true,\"code\":\"%06lu\",\"seconds\":%d}", (unsigned long)code, LIVE_PAIR_WINDOW_S);
+        else      snprintf(b, sizeof(b), "{\"ok\":false}");
+        r->send(200, "application/json", b);
+    });
+
     server.on("/clear-log", HTTP_POST, [](AsyncWebServerRequest* r) {
         log_clear();
         r->send(200, "application/json", "{\"ok\":true}");
@@ -234,6 +245,7 @@ void web_init() {
         ota_status_json(doc);   // ota_possible, ota_slot, ota_other_build
         doc["aes_example"]   = payload_key_is_example();      // 1.6.3: kein eigener Schluessel
         rcfg_status_json(doc);                                 // 1.6.8: rcfg_on, rcfg_odo, rcfg_soc
+        { char lb[120]; live_status_str(lb, sizeof(lb)); doc["live"] = serialized(lb); }   // mod_live: Abonnenten, gesendet, uebersprungen
         doc["resend_status"] = telem_store_resend_status();
         doc["rows_pending"]  = telem_store_pending();
         doc["uptime"]      = millis();

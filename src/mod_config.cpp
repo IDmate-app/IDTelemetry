@@ -50,6 +50,7 @@ static bool s_mod_gps         = true;   // Default: GPS vorhanden
 static bool s_mod_compass     = false;  // FIXES B.17: Default aus (kein Treiber aktiv, Setting persistiert nur)
 static bool s_log_can         = LOG_CAN_ENABLED_DEFAULT;
 static bool s_can_vbus        = false;   // 1.6.2: OBD-Spannung geschaltet → VBUS reicht zum Senden
+static bool s_live_ble        = false;   // mod_live: ab Werk aus
 static bool s_abrp_corr       = true;    // 1.6.8: ABRP bekommt Anzeige-SoC + Tacho-km (von IDmate gelernt)
 static bool s_log_ble         = LOG_BLE_ENABLED_DEFAULT;
 static bool s_log_wifi        = LOG_WIFI_ENABLED_DEFAULT;
@@ -97,6 +98,7 @@ void cfg_init() {
     s_log_can     = p.getBool("log_can", LOG_CAN_ENABLED_DEFAULT);
     s_can_vbus    = p.getBool("can_vbus", false);
     s_abrp_corr   = p.getBool("abrp_corr", true);
+    s_live_ble    = p.getBool("live_ble", false);
     s_log_ble     = p.getBool("log_ble", LOG_BLE_ENABLED_DEFAULT);
     s_log_wifi    = p.getBool("log_wifi", LOG_WIFI_ENABLED_DEFAULT);
     pref_load(p, "lang", s_lang, sizeof(s_lang), "de");
@@ -139,6 +141,7 @@ bool        cfg_mod_compass()  { return s_mod_compass; }
 bool        cfg_log_can()      { return s_log_can; }
 bool        cfg_can_vbus()     { return s_can_vbus; }
 bool        cfg_abrp_corr()    { return s_abrp_corr; }
+bool        cfg_live_ble()     { return s_live_ble; }
 bool        cfg_log_ble()      { return s_log_ble; }
 bool        cfg_log_wifi()     { return s_log_wifi; }
 const char* cfg_lang()         { return s_lang; }
@@ -281,6 +284,11 @@ bool cfg_save_json(const uint8_t* body, size_t len) {
         s_abrp_corr = doc["abrp_corr"].as<bool>();
         p.putBool("abrp_corr", s_abrp_corr);
     }
+    // Live-Daten ueber Bluetooth: wirkt nach dem Neustart (GATT-Dienste entstehen beim Start).
+    if (!doc["live_ble"].isNull()) {
+        s_live_ble = doc["live_ble"].as<bool>();
+        p.putBool("live_ble", s_live_ble);
+    }
     if (!doc["log_can"].isNull()) {
         s_log_can = doc["log_can"].as<bool>();
         p.putBool("log_can", s_log_can);
@@ -338,6 +346,7 @@ const char* cfg_to_json() {
     doc["log_can"]      = s_log_can;
     doc["can_vbus"]     = s_can_vbus;
     doc["abrp_corr"]    = s_abrp_corr;
+    doc["live_ble"]     = s_live_ble;
     doc["log_ble"]      = s_log_ble;
     doc["log_wifi"]     = s_log_wifi;
     doc["lang"]         = s_lang;

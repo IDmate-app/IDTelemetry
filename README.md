@@ -15,6 +15,7 @@ Born out of frustration: the VW ID.7 shows you almost nothing about what's happe
 - Buffers **~40,000 rows (~5,000 km)** in a dedicated 5 MB Flash partition — survives reboots, crashes and long radio dead zones
 - Tracks location via **Traccar** (OsmAnd protocol)
 - Emulates a **BLE ELM327** so ABRP sees the car natively
+- Optionally sends **live telegrams over Bluetooth** to a paired display device in the car ([docs/live-ble.md](docs/live-ble.md), off by default)
 - Runs a **WiFi AP with a full Web-UI** for live data, config and debugging
 - Sleeps in the **low-µA range** when parked, wakes on motion
 

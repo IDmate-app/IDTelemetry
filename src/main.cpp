@@ -34,6 +34,7 @@
 #include "mod_logs.h"
 #include "mod_web.h"
 #include "mod_elm327.h"
+#include "mod_live.h"
 #include "mod_ble_scan.h"
 #include "mod_rtc.h"
 #include "mod_gyro.h"
@@ -281,6 +282,7 @@ void setup() {
     // 4. BLE
     ble_scan_init();
     delay(200);
+    live_init();         // vor elm327_init(): GATT-Dienste muessen stehen, bevor die Werbung startet
     elm327_init();
     NimBLEDevice::startAdvertising();
 

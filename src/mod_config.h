@@ -76,6 +76,10 @@ bool        cfg_log_can();    // CAN/ELM SPIFFS-Log
 // Beweis, dass das Auto wach ist → Senden ohne Bewegungs-Bedingung (1.6.2)
 bool        cfg_can_vbus();
 bool        cfg_abrp_corr();    // 1.6.8: gelernte Korrekturen an ABRP anwenden
+// Live-Daten ueber Bluetooth fuer Anzeigegeraete (mod_live). Ab Werk aus.
+// Gekoppelt wird ueber ein Kopplungsfenster (live_pair_open), ein Code wird
+// nicht gespeichert.
+bool        cfg_live_ble();
 bool        cfg_log_ble();    // BLE SPIFFS-Log
 bool        cfg_log_wifi();   // WiFi Scan-Log (Legacy)
 

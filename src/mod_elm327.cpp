@@ -1,4 +1,5 @@
 #include "mod_elm327.h"
+#include "mod_live.h"
 #include "mod_sleep.h"
 #include "mod_ble_scan.h"
 #include "mod_can.h"
@@ -831,6 +832,10 @@ class ServerCallbacks : public NimBLEServerCallbacks {
             s_ble_peer_mac[2], s_ble_peer_mac[1], s_ble_peer_mac[0],
             itvl_ms, sup_ms, desc->conn_latency, n_conn);
         syslog("BLE", msg);
+    }
+    // Ein Kopplungsversuch ist beendet (mod_live: jeder Versuch verbraucht den Kopplungscode).
+    void onAuthenticationComplete(ble_gap_conn_desc* desc) override {
+        live_auth_done(desc->sec_state.encrypted);
     }
     void onDisconnect(NimBLEServer* s) override {
         ble_connected = false;

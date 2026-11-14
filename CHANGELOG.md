@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.0] – 2026-11-14
+
+### Added
+
+- **Live data over Bluetooth for display devices** ([docs/live-ble.md](docs/live-ble.md)): a paired device in the car – e.g. the IDmate app for Android Auto – gets state of charge, power, speed, odometer, temperatures, charging state and position straight from the stick, as CBOR telegrams over a GATT notification (1 s while driving, 30 s standing). Off by default (*Config → BLE / ABRP*), takes effect after a restart. The stick stays the one OBD master: the feature reads the telemetry cache and does not query the bus. The ELM327 emulation for ABRP is unchanged.
+- **Pairing window**: the telegrams go to a device paired with a six-digit code only (link encrypted and authenticated). The code is created when **Pair a device** is pressed on the config page, is valid for 3 minutes and for one attempt, and is not stored. A fixed code could be worked out from radio range in about 20 attempts; outside the window a secret random code is in force that is replaced after every attempt.
+
 ## [1.6.11] – 2026-11-07
 
 ### Added
