@@ -27,7 +27,8 @@ pressed.
 Devices already paired reconnect without a code; they keep working until their bond is removed on the
 device.
 
-The ELM327 emulation for ABRP (service `FFE0`) is unchanged and stays open as before.
+The ELM327 emulation for ABRP (service `FFE0`) stays open as before and has its own switch. Up to three
+devices can be connected at the same time, e.g. ABRP on the phone and the display device on the tablet.
 
 ## GATT
 

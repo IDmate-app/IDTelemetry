@@ -76,6 +76,7 @@ bool        cfg_log_can();    // CAN/ELM SPIFFS-Log
 // Beweis, dass das Auto wach ist → Senden ohne Bewegungs-Bedingung (1.6.2)
 bool        cfg_can_vbus();
 bool        cfg_abrp_corr();    // 1.6.8: gelernte Korrekturen an ABRP anwenden
+bool        cfg_abrp_ble();     // 1.7.1: ABRP-Helfer (ELM327-Emulation ueber Bluetooth) an/aus
 // Live-Daten ueber Bluetooth fuer Anzeigegeraete (mod_live). Ab Werk aus.
 // Gekoppelt wird ueber ein Kopplungsfenster (live_pair_open), ein Code wird
 // nicht gespeichert.

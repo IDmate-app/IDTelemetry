@@ -68,6 +68,8 @@
   "cfg.ble_title": "BLE / ABRP",
   "cfg.ble_standby": "Send standby defaults",
   "cfg.ble_hint": "When enabled, ABRP receives plausible standby values (0 km/h, 80% SoC etc.) even without a CAN connection and can pair. When disabled: ABRP gets \"NO DATA\" if there is no CAN.",
+  "cfg.abrp_ble": "ABRP helper over Bluetooth (OBD adapter for ABRP, Torque …)",
+  "cfg.abrp_ble_hint": "Off: the stick no longer offers ABRP an OBD adapter. Takes effect after a restart. The live data below is independent of it.",
   "cfg.abrp_corr": "ABRP gets the SoC as shown in the car",
   "cfg.live_ble": "Live data over Bluetooth for display devices",
   "cfg.live_pin": "Pairing code",

@@ -3,6 +3,16 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.1] – 2026-11-14
+
+### Fixed
+
+- **Two Bluetooth devices at once** (ABRP on the phone and a display device on the tablet): the stick stopped advertising with the first connection, so a second device could not find it; and when one device disconnected, the ELM327 emulation took the other one for gone too and ABRP got no more answers. The stick now keeps advertising while a connection is free (3 in total), and "disconnected" means that no device is connected any more. A further device connecting no longer discards ABRP's command in progress.
+
+### Added
+
+- **Switch for the ABRP helper** (*Config → BLE / ABRP*, on by default): off, the stick does not offer the ELM327 emulation (service `FFE0`). With both the helper and the live data off, the stick does not advertise over Bluetooth at all. Takes effect after a restart.
+
 ## [1.7.0] – 2026-11-14
 
 ### Added

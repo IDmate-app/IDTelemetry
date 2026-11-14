@@ -807,15 +807,24 @@ static uint8_t  s_ble_peer_mac[6]   = {0};
 
 class ServerCallbacks : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer* s) override {
+        // 1.7.1: mehrere Geraete zugleich (ABRP am Handy UND die Anzeige am Tablet).
+        // Nur das erste setzt die ELM-Sitzung zurueck: ein weiteres darf den
+        // laufenden Befehl von ABRP nicht verwerfen.
+        bool first = s->getConnectedCount() <= 1;
         ble_connected = true;
-        cmd_len = 0;
-        if (s_cmd_queue) {
-            char junk[64];
-            while (xQueueReceive(s_cmd_queue, junk, 0) == pdTRUE) {}
+        if (first) {
+            cmd_len = 0;
+            if (s_cmd_queue) {
+                char junk[64];
+                while (xQueueReceive(s_cmd_queue, junk, 0) == pdTRUE) {}
+            }
         }
-        syslog("BLE", "App verbunden (ABRP/Torque)");
+        syslog("BLE", first ? "App verbunden (ABRP/Torque)" : "weiteres Geraet verbunden");
         extern void ws_broadcast_json(const char*);
         ws_broadcast_json(JSON_BLE_CONN);
+        // Der Funk hoert mit der ersten Verbindung auf, sich zu melden: ein zweites
+        // Geraet faende den Stick nicht mehr. Weiter melden, solange ein Platz frei ist.
+        if (s->getConnectedCount() < CONFIG_BT_NIMBLE_MAX_CONNECTIONS) NimBLEDevice::startAdvertising();
     }
     // Variante mit Connection-Descriptor — loggt Peer-MAC + Verbindungsparameter
     void onConnect(NimBLEServer* s, ble_gap_conn_desc* desc) override {
@@ -838,7 +847,9 @@ class ServerCallbacks : public NimBLEServerCallbacks {
         live_auth_done(desc->sec_state.encrypted);
     }
     void onDisconnect(NimBLEServer* s) override {
-        ble_connected = false;
+        // Nur "getrennt", wenn kein Geraet mehr verbunden ist: trennte sich das Tablet,
+        // bekam ABRP sonst keine Antworten mehr (1.7.1).
+        ble_connected = s->getConnectedCount() > 0;
         if (s_cmd_queue) {
             char junk[64];
             while (xQueueReceive(s_cmd_queue, junk, 0) == pdTRUE) {}
@@ -858,7 +869,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
         syslog("BLE", msg);
         s_ble_conn_start_ms = 0;
         extern void ws_broadcast_json(const char*);
-        ws_broadcast_json(JSON_BLE_DISCONN);
+        if (n_conn == 0) ws_broadcast_json(JSON_BLE_DISCONN);
         NimBLEDevice::startAdvertising();
     }
 };
@@ -906,7 +917,11 @@ void elm327_init() {
         Serial.println("[ELM] FEHLER: BLE Server ist NULL! ble_scan_init() zuerst aufrufen!");
         return;
     }
-    pServer->setCallbacks(&serverCB);
+    pServer->setCallbacks(&serverCB);     // auch fuer mod_live (Kopplung, mehrere Geraete)
+    if (!cfg_abrp_ble()) {                // 1.7.1: der ABRP-Helfer ist abschaltbar
+        syslog("ELM", "ABRP-Helfer aus (Einstellungen): kein Dienst FFE0");
+        return;
+    }
     NimBLEService* pService = pServer->createService("FFE0");
     // FFE1: Read + Write + Notify - alles in einer Charakteristik
     pCharNotify = pService->createCharacteristic(

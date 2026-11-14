@@ -223,6 +223,11 @@
   <div class="section-title" data-i18n="cfg.ble_title">BLE / ABRP</div>
   <div class="card">
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+      <input type="checkbox" id="abrp_ble" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.abrp_ble">ABRP-Helfer über Bluetooth (OBD-Adapter für ABRP, Torque …)</span>
+    </label>
+    <div class="hint" data-i18n="cfg.abrp_ble_hint">Aus: der Stick bietet ABRP keinen OBD-Adapter mehr an. Wirkt nach dem Neustart. Die Live-Daten unten sind davon unabhängig.</div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:12px">
       <input type="checkbox" id="ble_standby" style="width:16px;height:16px;accent-color:var(--accent)">
       <span style="font-size:12px" data-i18n="cfg.ble_standby">Standby-Defaults senden</span>
     </label>
@@ -493,6 +498,7 @@ async function loadConfig(){
     document.getElementById('log_can').checked = d.log_can === true;
     document.getElementById('can_vbus').checked = d.can_vbus === true;
     document.getElementById('abrp_corr').checked = d.abrp_corr !== false;
+    document.getElementById('abrp_ble').checked = d.abrp_ble !== false;
     document.getElementById('live_ble').checked = d.live_ble === true;
     document.getElementById('live-pair-row').style.display = d.live_ble === true ? '' : 'none';
     document.getElementById('log_ble').checked = d.log_ble === true;
@@ -533,6 +539,7 @@ async function saveConfig(){
     log_can:      document.getElementById('log_can').checked,
     can_vbus:     document.getElementById('can_vbus').checked,
     abrp_corr:    document.getElementById('abrp_corr').checked,
+    abrp_ble:     document.getElementById('abrp_ble').checked,
     live_ble:     document.getElementById('live_ble').checked,
     log_ble:      document.getElementById('log_ble').checked,
     lang:         document.getElementById('lang').value,

@@ -284,7 +284,9 @@ void setup() {
     delay(200);
     live_init();         // vor elm327_init(): GATT-Dienste muessen stehen, bevor die Werbung startet
     elm327_init();
-    NimBLEDevice::startAdvertising();
+    // Ohne ABRP-Helfer und ohne Live-Daten bietet der Stick nichts ueber Bluetooth an:
+    // dann meldet er sich auch nicht (1.7.1).
+    if (cfg_abrp_ble() || cfg_live_ble()) NimBLEDevice::startAdvertising();
 
     // 5. CAN
     gps_ext_init();      // Ext. GPS (u-blox DAN-F10N, UART2) — nach CAN damit TWAI-Interrupts Vorrang haben
