@@ -9,6 +9,8 @@
   "cfg.wifi_pass": "Password",
   "cfg.wifi_hint": "⚠ AP name and password take effect after a restart.",
   "cfg.apn_title": "SIM / APN",
+  "cfg.lte": "Use mobile network (LTE)",
+  "cfg.lte_hint": "Off: the modem stays unpowered \u2013 no mobile network, no data use. The stick collects the data and hands it over only in the WLAN below (WiFi upload); on the road IDmate does not see the car. Bluetooth (ABRP, live data) keeps running. The modem's internal GPS is off too, the external one is not. Takes effect after a restart.",
   "cfg.sim_pin": "SIM PIN",
   "cfg.sim_pin_hint": "4-8 digits. Leave empty if no PIN is needed. After 3 wrong attempts the SIM is PUK-locked!",
   "cfg.apn_user": "APN user",

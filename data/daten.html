@@ -111,7 +111,7 @@ async function fetchStatus(){
     else setLed('gyro', d.gyro_state===2?'yellow':'green');
     setLed('gps', d.gps_valid?'green':'');
     setBatt(d.batt_pct??-1,d.charging??false,d.vbus_in??false);
-    updateModem(d.modem_sig??-1, d.modem_op??'', d.modem_sim??false, d.modem_ok??false);
+    updateModem(d.modem_sig??-1, d.modem_op??'', d.modem_sim??false, d.modem_ok??false,d.modem_on);
   }catch(e){}
 }
 fetchStatus();

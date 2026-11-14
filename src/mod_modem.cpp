@@ -113,6 +113,20 @@ static bool modem_ntp_sync();  // Forward-Declaration
 static TaskHandle_t s_modem_task_handle = nullptr;
 static volatile bool s_task_paused = false;  // "at stop" → Modem-Task pausiert
 
+// 1.7.2: Mobilfunk in den Einstellungen abgeschaltet. Wird beim Start einmal
+// festgelegt und gilt bis zum Neustart — cfg_lte() aendert sich schon beim
+// Speichern, das Modem aber laeuft bis dahin weiter (oder bleibt aus).
+// Aus heisst: DC3 stromlos, keine UART, kein Task. Der Rest des Geraets
+// laeuft dann wie die Lite-Variante: Daten sammeln, ueber WLAN abgeben.
+static bool s_off = false;
+
+// Fuer die Konsolenbefehle: ohne Modem gibt es nichts zu fragen, und ein
+// AT-Kommando auf die nicht gestartete UART wuerde nur sein Timeout absitzen.
+static bool modem_off_note() {
+    if (s_off) Serial.println("[MODEM] LTE ist abgeschaltet (Config) — Modem stromlos");
+    return s_off;
+}
+
 // ---- A-GPS: RTC-Zeit + Warm Start → schnellerer Fix ----
 
 // GPS aktivieren inkl. Multi-GNSS Konfiguration.
@@ -1370,7 +1384,22 @@ static void modem_task(void* /*param*/) {
 
 
 
+bool modem_enabled() { return !s_off; }
+
 void modem_init() {
+
+    if (!cfg_lte()) {
+        s_off = true;
+        // pmu_init() hat DC3 eben eingeschaltet. Ohne PWRKEY-Puls startet das
+        // Modem nicht; die Schiene geht trotzdem aus, damit es sicher nichts
+        // zieht. BLDO2 speist nur die Antenne des Modem-GNSS.
+        pmu_set_modem_power(false);
+        pmu_set_gps_power(false);
+        syslog("MODEM", "LTE abgeschaltet (Config) · Modem stromlos, Daten nur ueber WLAN");
+        if (strcmp(cfg_gps_src(), "int") == 0)
+            syslog("MODEM", "GPS-Quelle ist das Modem-GNSS — ohne Modem keine Position (Config: externes GPS waehlen)");
+        return;
+    }
 
     char syslog_msg[128];
 
@@ -1609,6 +1638,7 @@ void modem_init() {
 
 
 void modem_start_task() {
+    if (s_off) return;
     char syslog_msg[64];
     if (GPS_EXT_ENABLED)
         syslog("MODEM", "Task gestartet, internes GPS deaktiviert (ext. GPS aktiv)");
@@ -1713,6 +1743,7 @@ static bool gprs_connect_bounded(const char* apn, const char* user, const char* 
 }
 
 bool modem_ensure_connected() {
+    if (s_off) return false;
     if (s_modem.isGprsConnected()) {
         return true;
     }
@@ -1759,6 +1790,7 @@ bool        modem_sim_ok()          { return s_sim_ok; }
 void modem_pre_sleep_flush() {
     telem_force_capture("Schlafen");
     vTaskDelay(pdMS_TO_TICKS(300));
+    if (s_off) return;
 
     if (mqtt_is_connected()) {
         TelemetryRow row;
@@ -1779,6 +1811,7 @@ bool modem_mqtt_connected() {
 }
 
 void modem_poweroff() {
+    if (s_off) return;
     syslog("MODEM", "Power-Off fuer Deep Sleep...");
 
     // Task beenden falls noch aktiv
@@ -1797,6 +1830,7 @@ void modem_poweroff() {
 }
 
 void modem_print_lte_info() {
+    if (modem_off_note()) return;
     Serial.println("┌─── LTE Info ─────────────────────────┐");
     Serial.printf( "│ SIM:        %s\n", s_sim_ok ? "OK" : "nicht erkannt");
     Serial.printf( "│ Signal:     %d/31 CSQ\n", (int)s_sig_quality);
@@ -1836,10 +1870,12 @@ void modem_print_lte_info() {
 }
 
 void modem_print_lte_sig() {
+    if (modem_off_note()) return;
     cpsi_query_log(true);
 }
 
 void modem_print_lte_scan() {
+    if (modem_off_note()) return;
     Serial.println("Netzwerk-Scan läuft (bis 3 Min)...");
     Serial.flush();
 
@@ -1877,6 +1913,7 @@ void modem_print_lte_scan() {
 }
 
 void modem_print_lte_bands() {
+    if (modem_off_note()) return;
     Serial.println("┌─── LTE Band-Konfiguration ───────────┐");
 
     // Aktuelle Band-Config abfragen
@@ -1922,6 +1959,7 @@ void modem_print_lte_bands() {
 }
 
 void modem_lte_bands_fix(bool all) {
+    if (modem_off_note()) return;
     if (all) {
         Serial.println("[MODEM] Setze alle Baender (CAT-M + NB-IoT)...");
         s_modem.sendAT("+CBANDCFG=\"CAT-M\",1,2,3,4,5,8,12,13,14,17,18,19,20,25,26,27,28,66,85");
@@ -1970,6 +2008,7 @@ void modem_clear_reboot_count() {
 }
 
 void modem_pause_task() {
+    if (modem_off_note()) return;
     if (s_task_paused) {
         Serial.println("[MODEM] Task bereits pausiert");
         return;
@@ -1985,6 +2024,7 @@ void modem_pause_task() {
 }
 
 void modem_resume_task() {
+    if (modem_off_note()) return;
     if (!s_task_paused) {
         Serial.println("[MODEM] Task laeuft bereits");
         return;
@@ -1995,6 +2035,7 @@ void modem_resume_task() {
 }
 
 void modem_send_at(const char* cmd) {
+    if (modem_off_note()) return;
     // Modem-Task pausieren um Kollisionen zu vermeiden (nur wenn nicht schon pausiert)
     bool need_resume = !s_task_paused && s_modem_task_handle;
     if (need_resume) vTaskSuspend(s_modem_task_handle);

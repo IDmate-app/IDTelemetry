@@ -3,6 +3,16 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.2] – 2026-11-14
+
+### Added
+
+- **Switch for the mobile network** (*Config → SIM / APN*, on by default): off, the modem stays unpowered – no LTE, no data use, no network search. The stick then works like the Lite variant: it keeps collecting and hands the data over only in a WLAN from *WiFi Upload*; on the road the server does not see the car. Bluetooth (ABRP helper, live data) is unaffected, so the three data paths – server over LTE, ABRP over Bluetooth, display device over Bluetooth – can each be switched on their own. The modem's internal GNSS is off with it; the external GPS is not. Values learned by IDmate arrive over WLAN only. The status display shows `LTE OFF`. Takes effect after a restart.
+
+### Changed
+
+- **End of a trip without the modem task** (mobile network off): "supply voltage gone for 5 s → take the last point and stop recording" and the point "Schlafen" before sleeping were both done by the modem task. With the modem off the sleep logic does both itself, so a trip ends the same way with and without LTE. Nothing changes while the modem is on.
+
 ## [1.7.1] – 2026-11-14
 
 ### Fixed

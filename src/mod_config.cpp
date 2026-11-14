@@ -53,6 +53,7 @@ static bool s_can_vbus        = false;   // 1.6.2: OBD-Spannung geschaltet → V
 static bool s_live_ble        = false;   // mod_live: ab Werk aus
 static bool s_abrp_corr       = true;    // 1.6.8: ABRP bekommt Anzeige-SoC + Tacho-km (von IDmate gelernt)
 static bool s_abrp_ble        = true;    // 1.7.1: ABRP-Helfer (ELM327 ueber Bluetooth), ab Werk an
+static bool s_lte             = true;    // 1.7.2: Mobilfunk; aus = Modem bleibt stromlos
 static bool s_log_ble         = LOG_BLE_ENABLED_DEFAULT;
 static bool s_log_wifi        = LOG_WIFI_ENABLED_DEFAULT;
 static char s_lang[8]         = "de";
@@ -100,6 +101,7 @@ void cfg_init() {
     s_can_vbus    = p.getBool("can_vbus", false);
     s_abrp_corr   = p.getBool("abrp_corr", true);
     s_abrp_ble    = p.getBool("abrp_ble", true);
+    s_lte         = p.getBool("lte", true);
     s_live_ble    = p.getBool("live_ble", false);
     s_log_ble     = p.getBool("log_ble", LOG_BLE_ENABLED_DEFAULT);
     s_log_wifi    = p.getBool("log_wifi", LOG_WIFI_ENABLED_DEFAULT);
@@ -144,6 +146,7 @@ bool        cfg_log_can()      { return s_log_can; }
 bool        cfg_can_vbus()     { return s_can_vbus; }
 bool        cfg_abrp_corr()    { return s_abrp_corr; }
 bool        cfg_abrp_ble()     { return s_abrp_ble; }
+bool        cfg_lte()          { return s_lte; }
 bool        cfg_live_ble()     { return s_live_ble; }
 bool        cfg_log_ble()      { return s_log_ble; }
 bool        cfg_log_wifi()     { return s_log_wifi; }
@@ -292,6 +295,11 @@ bool cfg_save_json(const uint8_t* body, size_t len) {
         s_abrp_ble = doc["abrp_ble"].as<bool>();
         p.putBool("abrp_ble", s_abrp_ble);
     }
+    // Mobilfunk: wirkt nach dem Neustart (das Modem wird nur beim Start eingeschaltet).
+    if (!doc["lte"].isNull()) {
+        s_lte = doc["lte"].as<bool>();
+        p.putBool("lte", s_lte);
+    }
     // Live-Daten ueber Bluetooth: wirkt nach dem Neustart (GATT-Dienste entstehen beim Start).
     if (!doc["live_ble"].isNull()) {
         s_live_ble = doc["live_ble"].as<bool>();
@@ -355,6 +363,7 @@ const char* cfg_to_json() {
     doc["can_vbus"]     = s_can_vbus;
     doc["abrp_corr"]    = s_abrp_corr;
     doc["abrp_ble"]     = s_abrp_ble;
+    doc["lte"]          = s_lte;
     doc["live_ble"]     = s_live_ble;
     doc["log_ble"]      = s_log_ble;
     doc["log_wifi"]     = s_log_wifi;

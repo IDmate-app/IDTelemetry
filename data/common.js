@@ -24,7 +24,13 @@ if (!window._menuListener) {
 
 // ── Modem Widget ─────────────────────────────────────────
 var _modemLastOp = '';
-function updateModem(sig, op, sim, conn) {
+function updateModem(sig, op, sim, conn, on) {
+  if (on === false) {            // LTE in der Config abgeschaltet: kein Fehler, nur aus
+    for (var j = 1; j <= 5; j++) { var x = document.getElementById('mb' + j); if (x) x.classList.remove('on'); }
+    var off = document.getElementById('modem-op');
+    if (off) { off.textContent = 'LTE OFF'; off.style.color = 'var(--muted)'; }
+    return;
+  }
   var bars = !sim ? 0 : (sig < 0 || sig === 99 || sig === 0) ? 0 : sig < 5 ? 1 : sig < 10 ? 2 : sig < 15 ? 3 : sig < 20 ? 4 : 5;
   if (bars > 0 && op) _modemLastOp = op;
   for (var i = 1; i <= 5; i++) {

@@ -278,6 +278,7 @@ void web_init() {
         doc["modem_sig"]   = (int)modem_signal_quality();
         doc["modem_op"]    = modem_operator();
         doc["modem_sim"]   = modem_sim_ok();
+        doc["modem_on"]    = modem_enabled();   // 1.7.2: false = LTE abgeschaltet
         String out; serializeJson(doc, out);
         auto* resp = r->beginResponse(200, "application/json", out);
         headers_apply(resp);

@@ -9,6 +9,8 @@
   "cfg.wifi_pass": "Passwort",
   "cfg.wifi_hint": "\u26a0 AP-Name und Passwort werden erst nach Neustart aktiv.",
   "cfg.apn_title": "SIM / APN",
+  "cfg.lte": "Mobilfunk (LTE) verwenden",
+  "cfg.lte_hint": "Aus: das Modem bleibt stromlos \u2013 kein Mobilfunk, kein Datenverbrauch. Der Stick sammelt die Daten und gibt sie nur noch im WLAN unten (WiFi Upload) ab; unterwegs sieht IDmate das Auto dann nicht. Bluetooth (ABRP, Live-Daten) l\u00e4uft weiter. Das interne GPS des Modems f\u00e4llt mit aus, das externe nicht. Wirkt nach dem Neustart.",
   "cfg.sim_pin": "SIM PIN",
   "cfg.sim_pin_hint": "4-8 Ziffern. Leer lassen wenn kein PIN n\u00f6tig. Nach 3 Fehlversuchen wird die SIM mit PUK gesperrt!",
   "cfg.apn_user": "APN Benutzer",

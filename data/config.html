@@ -85,6 +85,11 @@
   <!-- SIM / APN -->
   <div class="section-title" data-i18n="cfg.apn_title">SIM / APN</div>
   <div class="card">
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+      <input type="checkbox" id="lte" style="width:16px;height:16px;accent-color:var(--accent)">
+      <span style="font-size:12px" data-i18n="cfg.lte">Mobilfunk (LTE) verwenden</span>
+    </label>
+    <div class="hint" style="margin-bottom:12px" data-i18n="cfg.lte_hint">Aus: das Modem bleibt stromlos &ndash; kein Mobilfunk, kein Datenverbrauch. Der Stick sammelt die Daten und gibt sie nur noch im WLAN unten (WiFi Upload) ab; unterwegs sieht IDmate das Auto dann nicht. Bluetooth (ABRP, Live-Daten) l&auml;uft weiter. Das interne GPS des Modems f&auml;llt mit aus, das externe nicht. Wirkt nach dem Neustart.</div>
     <div class="field">
       <div class="lbl" data-i18n="cfg.sim_pin">SIM PIN</div>
       <div style="display:flex;gap:6px">
@@ -385,7 +390,7 @@ async function fetchStatus(){
     setLed('gps',d.gps_valid?'green':'');
     setLed('lte',d.modem_ok?'green':'');
     setBatt(d.batt_pct??-1,d.charging??false,d.vbus_in??false);
-    updateModem(d.modem_sig??-1,d.modem_op??'',d.modem_sim??false,d.modem_ok??false);
+    updateModem(d.modem_sig??-1,d.modem_op??'',d.modem_sim??false,d.modem_ok??false,d.modem_on);
   }catch(e){}
   try{
     var ti=await(await fetch('/api/telemetry')).json();
@@ -499,6 +504,7 @@ async function loadConfig(){
     document.getElementById('can_vbus').checked = d.can_vbus === true;
     document.getElementById('abrp_corr').checked = d.abrp_corr !== false;
     document.getElementById('abrp_ble').checked = d.abrp_ble !== false;
+    document.getElementById('lte').checked = d.lte !== false;
     document.getElementById('live_ble').checked = d.live_ble === true;
     document.getElementById('live-pair-row').style.display = d.live_ble === true ? '' : 'none';
     document.getElementById('log_ble').checked = d.log_ble === true;
@@ -540,6 +546,7 @@ async function saveConfig(){
     can_vbus:     document.getElementById('can_vbus').checked,
     abrp_corr:    document.getElementById('abrp_corr').checked,
     abrp_ble:     document.getElementById('abrp_ble').checked,
+    lte:          document.getElementById('lte').checked,
     live_ble:     document.getElementById('live_ble').checked,
     log_ble:      document.getElementById('log_ble').checked,
     lang:         document.getElementById('lang').value,

@@ -77,6 +77,9 @@ bool        cfg_log_can();    // CAN/ELM SPIFFS-Log
 bool        cfg_can_vbus();
 bool        cfg_abrp_corr();    // 1.6.8: gelernte Korrekturen an ABRP anwenden
 bool        cfg_abrp_ble();     // 1.7.1: ABRP-Helfer (ELM327-Emulation ueber Bluetooth) an/aus
+// 1.7.2: Mobilfunk an/aus. Aus = das Modem bleibt stromlos, Daten gehen nur
+// ueber das WLAN (wie bei der Lite-Variante). Wirkt nach dem Neustart.
+bool        cfg_lte();
 // Live-Daten ueber Bluetooth fuer Anzeigegeraete (mod_live). Ab Werk aus.
 // Gekoppelt wird ueber ein Kopplungsfenster (live_pair_open), ein Code wird
 // nicht gespeichert.

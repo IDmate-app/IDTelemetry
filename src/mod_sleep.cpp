@@ -127,6 +127,7 @@ void sleep_update() {
     if (g_nosleep || g_shutdown) return;
 
     static bool s_trigger_logged = false;
+    static bool s_vbus_seen = false;   // 1.7.2: VBUS in dieser Wachphase schon gesehen
     uint32_t now = millis();
 
     // ─── VBUS = Auto an → wach bleiben ─────────────────────
@@ -134,6 +135,8 @@ void sleep_update() {
     if (vbus) {
         g_last_vbus_seen_ms = now;
         s_crit_since = 0;
+        s_vbus_seen = true;
+        if (!modem_enabled()) g_trip_ending = false;   // sonst setzt es der Modem-Task zurueck
         // Sleep-Anforderung zurücknehmen falls VBUS zurückgekehrt ist
         if (g_sleep_requested) {
             g_sleep_requested = false;
@@ -163,6 +166,17 @@ void sleep_update() {
 
     // VBUS weg → Schonfrist (Aussteigen/Laden/Wiedereinsteigen), siehe unten
     uint32_t vbus_gone_ms = now - g_last_vbus_seen_ms;
+
+    // 1.7.2: Fahrtende ohne Modem-Task (LTE abgeschaltet). Sonst erkennt der
+    // Modem-Task "VBUS weg seit 5 s", nimmt den letzten Punkt auf und haelt die
+    // laufende Aufzeichnung an (g_trip_ending). Nur mit verlaesslichem
+    // VBUS-Signal und wenn VBUS in dieser Wachphase schon da war — sonst
+    // hielte ein Geraet ohne PMU die Aufzeichnung gleich nach dem Start an.
+    if (!modem_enabled() && pmu_ok() && s_vbus_seen && !g_trip_ending && vbus_gone_ms >= 5000UL) {
+        g_trip_ending = true;
+        syslog("SLEEP", "VBUS weg seit 5s — letzter Punkt");
+        telem_force_capture("VBUS weg");
+    }
     // FIXES B.10: Bei defekter PMU liefert pmu_is_vbus_in() IMMER false → der
     // VBUS-Timer würde mitten in der Fahrt einschlafen (Gyro weckt sofort →
     // Dauerschleife, Modem-Boot-Storm). Ohne verlässliches VBUS-Signal NICHT
@@ -263,6 +277,11 @@ void sleep_update() {
         syslog("SLEEP", msg);
         g_sleep_requested = true;
         s_sleep_req_ms = now;
+        // 1.7.2: Ohne Modem-Task (LTE abgeschaltet) nimmt niemand den letzten
+        // Punkt vor dem Schlafen auf — das macht sonst modem_pre_sleep_flush().
+        // Die zwei Minuten bis zum Einschlafen bleiben: in der Zeit gibt der
+        // WLAN-Upload ab, was er zu Hause noch schafft.
+        if (!modem_enabled()) telem_force_capture("Schlafen");
     } else if ((now - s_sleep_req_ms) >= 120000UL) {
         // Modem hat 2 min nicht reagiert (z.B. Netzsuche) → direkt einschlafen
         enter_deep_sleep(msg);

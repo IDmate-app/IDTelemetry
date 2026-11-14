@@ -14,6 +14,10 @@
 #if FEATURE_MODEM
 
 void modem_init();
+// false, wenn der Mobilfunk in den Einstellungen abgeschaltet ist (1.7.2) —
+// dann ist das Modem stromlos und der Modem-Task laeuft nicht. Gilt ab dem
+// Start bis zum naechsten Neustart.
+bool modem_enabled();
 void modem_start_task();
 bool modem_ensure_connected();
 bool modem_is_connected();
@@ -45,6 +49,7 @@ bool modem_mqtt_connected();
 #else  // FEATURE_MODEM == 0 — Lite variant has no SIM7080G
 
 static inline void modem_init()              {}
+static inline bool modem_enabled()           { return false; }
 static inline void modem_start_task()        {}
 static inline bool modem_ensure_connected()  { return false; }
 static inline bool modem_is_connected()      { return false; }
