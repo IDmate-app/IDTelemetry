@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.3] – 2026-11-17
+
+### Fixed
+
+- **Web update failing silently**: when the upload broke off (connection lost, restart during the upload), the page still showed a green "restarting"; rejected uploads (wrong password, variant, image) and write or check errors only went to the serial console. Now every failure goes to the syslog (`OTA`, with the reason and the bytes received), an upload that did not finish is reported at the next start, and the next start also tells whether the update took: "Update uebernommen: old -> new" or "Update NICHT uebernommen". The settings page remembers the running build before the upload, reloads after the restart and compares: it says whether the new firmware runs, and shows the result of the last update under the firmware slot. A new upload after a broken one no longer fails at the start.
+- **CAN driver restarted on every voltage dropout**: while driving, the PMU now and then reported the supply as gone for 1–2 s, and each time the CAN driver was reinstalled for listen-only mode and back (175 times on one trip). Listen-only mode now starts only after the supply has been gone for 3 s; back to normal operation is immediate. Sending stays blocked during any dropout as before.
+
 ## [1.7.2] – 2026-11-14
 
 ### Added

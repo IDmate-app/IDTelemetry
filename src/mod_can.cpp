@@ -31,6 +31,7 @@ static bool charge_hold() {
 }
 
 static volatile bool s_listen_only = false;   // 1.6.2: ohne VBUS nur hoeren
+#define VBUS_GONE_LISTEN_MS 3000UL                // 1.7.3: Entprellung Hoermodus
 
 static bool can_tx_allowed() {
     if (!pmu_is_vbus_in() || s_listen_only) return false;
@@ -948,6 +949,18 @@ void can_sniff(uint32_t duration_ms) {
 void can_passive_tick() {
     if (!can_running || scan_running || monitor_mode) return;
     bool want = pmu_ok() && !pmu_is_vbus_in();
+    // 1.7.3: entprellen. Waehrend der Fahrt meldete die PMU die Spannung immer
+    // wieder fuer 1-2 s als weg; jedes Mal wurde der Treiber neu installiert
+    // (175x in einer Fahrt). In den Hoermodus erst, wenn die Spannung 3 s am
+    // Stueck fehlt; zurueck in den Normalbetrieb sofort. Senden bleibt waehrend
+    // eines Aussetzers trotzdem gesperrt (can_tx_allowed() prueft ungefiltert).
+    static uint32_t s_gone_ms = 0;
+    if (want) {
+        if (s_gone_ms == 0) s_gone_ms = millis();
+        if (!s_listen_only && millis() - s_gone_ms < VBUS_GONE_LISTEN_MS) want = false;
+    } else {
+        s_gone_ms = 0;
+    }
     static uint32_t s_n = 0, s_win_ms = 0;
     static uint32_t s_ids[24]; static int s_nid = 0;
     if (want != s_listen_only) {

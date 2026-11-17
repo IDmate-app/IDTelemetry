@@ -17,6 +17,34 @@
 static const char* s_err = "";
 static bool        s_active = false;
 static bool        s_ok     = false;
+static size_t      s_bytes  = 0;
+
+// 1.7.3: Ergebnis des letzten Updates fuer Syslog und Einstellungsseite.
+// "last" bleibt bis zum naechsten Update stehen: ok:<alt>><neu>, same:<build>,
+// rolled:<build>, err:<code>. "busy" ist waehrend des Uploads gesetzt: steht es
+// beim Start noch, ist der Upload abgebrochen (Verbindung weg, Neustart).
+// "prev" ist der Build vor dem Update: daran sieht der naechste Start, ob die
+// neue Firmware wirklich laeuft.
+static void ota_note(const char* last) {
+    Preferences p;
+    if (!p.begin(OTA_NS, false)) return;
+    p.putString("last", last);
+    p.end();
+}
+
+static void ota_fail(const char* code, const char* what) {
+    char m[96];
+    snprintf(m, sizeof(m), "Update fehlgeschlagen (%s) nach %u Bytes: %s — alte Firmware bleibt",
+             code, (unsigned)s_bytes, what);
+    syslog("OTA", m);
+    Preferences p;
+    if (p.begin(OTA_NS, false)) {
+        p.putBool("busy", false);
+        char l[24]; snprintf(l, sizeof(l), "err:%s", code);
+        p.putString("last", l);
+        p.end();
+    }
+}
 
 static bool image_valid(const esp_partition_t* p) {
     esp_app_desc_t d;
@@ -85,12 +113,34 @@ void ota_boot_log() {
     if (!p.begin(OTA_NS, false)) return;
     bool rolled = p.getBool("rolled", false);
     if (rolled) p.putBool("rolled", false);
+    bool busy = p.getBool("busy", false);
+    if (busy) p.putBool("busy", false);
+    String prev = p.getString("prev", "");
+    if (prev.length()) p.remove("prev");
     p.end();
     char m[96];
     snprintf(m, sizeof(m), "Platz %s · zweiter Platz %s", run ? run->label : "?",
              ota_possible() ? "vorhanden (Web-Update moeglich)" : "fehlt (nur USB)");
     syslog("OTA", m);
-    if (rolled) syslog("OTA", "RUECKFALL: neue Firmware ist 3x abgestuerzt, vorherige laeuft wieder");
+    if (rolled) {
+        syslog("OTA", "RUECKFALL: neue Firmware ist 3x abgestuerzt, vorherige laeuft wieder (Grund: PANIC-Zeilen davor)");
+        char l[48]; snprintf(l, sizeof(l), "rolled:%s", FW_BUILD);
+        ota_note(l);
+    } else if (busy) {
+        syslog("OTA", "Update abgebrochen: Upload kam nicht vollstaendig an (Verbindung weg oder Neustart) — alte Firmware laeuft");
+        ota_note("err:upload");
+    } else if (prev.length()) {
+        char m[112], l[64];
+        if (prev != FW_BUILD) {
+            snprintf(m, sizeof(m), "Update uebernommen: %s -> %s", prev.c_str(), FW_BUILD);
+            snprintf(l, sizeof(l), "ok:%s>%s", prev.c_str(), FW_BUILD);
+        } else {
+            snprintf(m, sizeof(m), "Update NICHT uebernommen: es laeuft weiter %s", FW_BUILD);
+            snprintf(l, sizeof(l), "same:%s", FW_BUILD);
+        }
+        syslog("OTA", m);
+        ota_note(l);
+    }
 }
 
 void ota_status_json(JsonDocument& doc) {
@@ -98,6 +148,14 @@ void ota_status_json(JsonDocument& doc) {
     const esp_partition_t* other = other_slot();
     doc["ota_possible"] = other != nullptr;
     doc["ota_slot"] = run ? run->label : "";
+    {
+        Preferences p;
+        if (p.begin(OTA_NS, true)) {
+            String last = p.getString("last", "");
+            p.end();
+            if (last.length()) doc["ota_last"] = last;
+        }
+    }
     if (other && image_valid(other)) {
         Preferences p;
         if (p.begin(OTA_NS, true)) {
@@ -117,43 +175,69 @@ static bool pw_ok(const char* pw) {
 
 bool ota_upload_begin(const char* filename, const char* pw, const uint8_t* first, size_t len) {
     s_err = "";
+    // Ein abgebrochener Upload (Verbindung weg, kein letzter Block) liess das
+    // Update offen; ohne abort() scheitert jeder weitere Versuch an begin().
+    if (s_active) Update.abort();
     s_active = false;
     s_ok = false;
-    if (!ota_possible())        { s_err = "noslot"; return false; }
-    if (!pw_ok(pw))             { s_err = "pw"; return false; }
+    s_bytes = 0;
+    const char* fn = filename && filename[0] ? filename : "?";
+    if (!ota_possible())        { s_err = "noslot"; ota_fail(s_err, fn); return false; }
+    if (!pw_ok(pw))             { s_err = "pw"; ota_fail(s_err, fn); return false; }
     // Variante am Dateinamen (Release-Assets heissen idtelemetry-full-/-lite-...)
     bool full = strcmp(FW_VARIANT, "full") == 0;
     if (filename && ((full && strstr(filename, "lite")) || (!full && strstr(filename, "full")))) {
-        s_err = "variant"; return false;
+        s_err = "variant"; ota_fail(s_err, fn); return false;
     }
     // ESP-App-Image fuer ESP32-S3: Magic 0xE9, Chip-ID an Byte 12/13
     if (len < 16 || first[0] != 0xE9 || (uint16_t)(first[12] | (first[13] << 8)) != CHIP_ID_ESP32S3) {
-        s_err = "image"; return false;
+        s_err = "image"; ota_fail(s_err, fn); return false;
     }
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) { s_err = "begin"; return false; }
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+        s_err = "begin"; ota_fail(s_err, Update.errorString()); return false;
+    }
     s_active = true;
-    syslog("OTA", filename && filename[0] ? filename : "Upload gestartet");
+    {
+        Preferences p;
+        if (p.begin(OTA_NS, false)) { p.putBool("busy", true); p.end(); }
+    }
+    char m[96];
+    snprintf(m, sizeof(m), "Upload gestartet: %s (laufend %s)", fn, FW_BUILD);
+    syslog("OTA", m);
     return true;
 }
 
 bool ota_upload_write(const uint8_t* data, size_t len) {
     if (!s_active) return false;
-    if (Update.write((uint8_t*)data, len) != len) { s_err = "write"; s_active = false; Update.abort(); return false; }
+    if (Update.write((uint8_t*)data, len) != len) {
+        s_err = "write"; s_active = false;
+        const char* why = Update.errorString();
+        Update.abort();
+        ota_fail(s_err, why);
+        return false;
+    }
+    s_bytes += len;
     return true;
 }
 
 bool ota_upload_end() {
     if (!s_active) return false;
     s_active = false;
-    if (!Update.end(true)) { s_err = "verify"; return false; }   // prueft Image + SHA, setzt Boot-Platz
+    if (!Update.end(true)) {   // prueft Image + SHA, setzt Boot-Platz
+        s_err = "verify"; ota_fail(s_err, Update.errorString()); return false;
+    }
     s_ok = true;
     Preferences p;
     if (p.begin(OTA_NS, false)) {
         p.putBool("fresh", true);
         p.putUChar("fails", 0);
+        p.putBool("busy", false);
+        p.putString("prev", FW_BUILD);
         p.end();
     }
-    syslog("OTA", "Upload OK, Image geprueft — Neustart in die neue Firmware");
+    char m[96];
+    snprintf(m, sizeof(m), "Upload OK (%u Bytes), Image geprueft — Neustart in die neue Firmware", (unsigned)s_bytes);
+    syslog("OTA", m);
     return true;
 }
 

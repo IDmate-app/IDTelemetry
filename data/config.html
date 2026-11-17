@@ -361,6 +361,7 @@
       <span id="ota-status" style="font-size:11px;color:var(--muted)" data-i18n="cfg.ota_none">Keine Datei ausgew&#228;hlt</span>
     </div>
     <div id="ota-slot" style="margin-top:10px;font-size:11px;color:var(--muted)"></div>
+    <div id="ota-last" style="margin-top:4px;font-size:11px;color:var(--muted)"></div>
     <button class="btn" style="margin-top:8px;display:none" onclick="otaRollback()" id="btn-ota-back"></button>
     <div class="hint warn" style="margin-top:8px" data-i18n="cfg.ota_hint">
       &#9888; Das Ger&#228;t startet nach erfolgreichem Upload automatisch neu. WLAN-Verbindung wird kurz unterbrochen.
@@ -378,11 +379,12 @@
 async function fetchStatus(){
   try{
     var d=await(await fetch('/status')).json();
-    if(d.fw_version){var v=document.getElementById('fw-ver');if(v){var b=d.fw_build&&d.fw_build!==d.fw_version?' · '+d.fw_build:'';v.textContent='v'+d.fw_version+(d.fw_variant?' '+d.fw_variant:'')+b;v.title='Build '+(d.fw_build||d.fw_version);if(b.indexOf('dirty')>=0)v.style.color='var(--orange)';}}
+    if(d.fw_version){var v=document.getElementById('fw-ver');if(v){var b=d.fw_build&&d.fw_build!==d.fw_version?' · '+d.fw_build:'';v.textContent='v'+d.fw_version+(d.fw_variant?' '+d.fw_variant:'')+b;v.title='Build '+(d.fw_build||d.fw_version);if(b.indexOf('dirty')>=0)v.style.color='var(--orange)';}otaCheck(d.fw_build||d.fw_version);}
     if(d.ota_possible===false){var od=document.getElementById('ota-drop'),ob=document.getElementById('btn-ota'),os=document.getElementById('ota-status'),op=document.getElementById('ota-pw');
       if(od)od.style.display='none';if(ob)ob.style.display='none';if(op)op.style.display='none';if(os)os.textContent=t('cfg.ota_unavailable');}
     else if(d.ota_slot){var sl=document.getElementById('ota-slot');if(sl)sl.textContent=t('cfg.ota_slot',[d.ota_slot]);
-      var bb=document.getElementById('btn-ota-back');if(bb&&d.ota_other_build){bb.textContent=t('cfg.ota_back',[d.ota_other_build]);bb.style.display='';}}
+      var bb=document.getElementById('btn-ota-back');if(bb&&d.ota_other_build){bb.textContent=t('cfg.ota_back',[d.ota_other_build]);bb.style.display='';}
+      var ol=document.getElementById('ota-last');if(ol)ol.textContent=otaLastText(d.ota_last);}
     var rc=document.getElementById('rcfg-state');if(rc){var rp=[];if(d.rcfg_soc)rp.push(t('cfg.rcfg_soc',[d.rcfg_soc]));if(d.rcfg_odo!=null)rp.push(t('cfg.rcfg_odo',[(d.rcfg_odo>0?'+':'')+d.rcfg_odo]));rc.textContent=rp.length?t('cfg.rcfg_from',[rp.join(' · ')]):t('cfg.rcfg_none');}
     var aa=document.getElementById('aes-alarm');if(aa)aa.style.display=d.aes_example?'':'none';
     var rs=document.getElementById('rs-status');if(rs&&d.resend_status)rs.textContent=d.resend_status==='laeuft'?t('cfg.resend_running'):d.resend_status+(d.rows_pending!=null?' · '+t('cfg.resend_pending',[d.rows_pending]):'');
@@ -573,6 +575,35 @@ async function saveConfig(){
 
 // ── OTA Upload ───────────────────────────────────────────
 var _otaFile=null;
+var _fwBuild='';
+
+// 1.7.3: Nach dem Neustart pruefen, ob die neue Firmware wirklich laeuft.
+// Vor dem Upload merkt sich die Seite den laufenden Build; aendert er sich
+// nicht, war das Update nicht erfolgreich (abgebrochen oder Rueckfall).
+function otaCheck(build){
+  _fwBuild=build||'';
+  var from=sessionStorage.getItem('ota_from');
+  if(from===null||!build)return;
+  sessionStorage.removeItem('ota_from');
+  var st=document.getElementById('ota-status');
+  if(build!==from){
+    toast(t('cfg.ota_now',[build]));
+    if(st){st.style.color='var(--green)';st.textContent=t('cfg.ota_now',[build]);}
+  }else{
+    toast(t('cfg.ota_same',[build]),false);
+    if(st){st.style.color='var(--red)';st.textContent='\u2717 '+t('cfg.ota_same',[build]);}
+  }
+}
+function otaLastText(l){
+  if(!l)return '';
+  var i=l.indexOf(':'),k=i<0?l:l.slice(0,i),v=i<0?'':l.slice(i+1);
+  if(k==='ok')return t('cfg.ota_last_ok',[v.replace('>',' \u2192 ')]);
+  if(k==='same')return t('cfg.ota_last_same',[v]);
+  if(k==='rolled')return t('cfg.ota_last_rolled',[v]);
+  if(k==='err'){var w=t('cfg.ota_err_'+v);if(w==='cfg.ota_err_'+v)w=v;return t('cfg.ota_last_err',[w]);}
+  return l;
+}
+function otaReload(){setTimeout(function(){location.reload();},12000);}
 
 document.getElementById('ota-file').addEventListener('change',function(){
   _otaFile=this.files[0]||null;
@@ -651,6 +682,7 @@ async function startOta(){
   form.append('pw',document.getElementById('ota-pw').value);   // VOR der Datei: der Stick prueft es beim ersten Block
   form.append('firmware',_otaFile,_otaFile.name);
 
+  sessionStorage.setItem('ota_from',_fwBuild);
   var xhr=new XMLHttpRequest();
   xhr.open('POST','/api/ota');
 
@@ -671,27 +703,29 @@ async function startOta(){
         st.style.color='var(--green)';
         st.textContent=t('cfg.ota_ok');
         toast(t('cfg.ota_flashed'));
+        otaReload();
       }else{
         st.style.color='var(--red)';
         var why=d.err?t('cfg.ota_err_'+d.err):'';
         if(!why||why==='cfg.ota_err_'+d.err)why=t('cfg.ota_fail')+(d.err?' ('+d.err+')':'');
         st.textContent='\u2717 '+why;
         toast(why,false);
+        sessionStorage.removeItem('ota_from');
         btn.disabled=false;
       }
     }catch(_){
-      st.style.color='var(--red)';
-      st.textContent=t('cfg.ota_reboot_noresp');
-      toast(t('cfg.ota_reboot'));
+      // Keine lesbare Antwort: ob das Update durchging, zeigt erst die Version nach dem Neuladen
+      st.style.color='var(--accent)';
+      st.textContent=t('cfg.ota_lost');
+      otaReload();
     }
   };
 
   xhr.onerror=function(){
-    st.style.color='var(--green)';
-    st.textContent=t('cfg.ota_reboot_reload');
-    bar.style.width='100%';
-    bar.style.background='var(--green)';
-    setTimeout(function(){location.reload();},10000);
+    // Verbindung weg: kein Erfolg melden, sondern nach dem Neuladen die Version vergleichen
+    st.style.color='var(--accent)';
+    st.textContent=t('cfg.ota_lost');
+    otaReload();
   };
 
   xhr.send(form);
