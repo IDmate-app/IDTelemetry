@@ -219,16 +219,16 @@ Diese Fixes berühren Modem-Power, Sleep-Pfade, AP-Handling oder Cross-Core-Conc
 - **Fix**: erst die PANIC-Ursache am Testaufbau reproduzieren/lösen, dann AP-Timeout auch bei VBUS (z. B. 10 min nach letztem Client).
 - **Schwere**: P2 · **Aufwand**: mittel + Testaufbau
 
-### [ ] C.5 — Gemeinsamer I2C-Bus (RTC + MPU-6050) ohne Mutex
+### [x] C.5 — Gemeinsamer I2C-Bus (RTC + MPU-6050) ohne Mutex
 - **Datei**: `src/mod_gyro.cpp:130-217` (gyro_task, alle 100 ms) vs. `src/mod_rtc.cpp:90` (aufgerufen aus dem AsyncWebServer-`/status`-Handler, mod_web.cpp:225)
 - **Problem**: beide nutzen `Wire` (GPIO45/21) ohne Lock; gleichzeitiger Zugriff aus zwei Tasks kann Transaktionen verschränken → korrupte Gyro-Reads (fließen in `TELEM_GYRO_G` und ins CAN-TX-Gate!) bzw. falsche RTC-Reads.
-- **Fix**: globaler I2C-Mutex um alle Wire-Transaktionen (gyro + rtc + ggf. compass).
+- **Fix**: globaler I2C-Mutex um alle Wire-Transaktionen (gyro + rtc + ggf. compass). → erledigt in 1.7.4 (`src/i2c_lock.h`).
 - **Schwere**: P2 · **Aufwand**: mittel + Testaufbau (Timing!)
 
 ### [ ] C.6 — `is_parked` über exakten Byte-Vergleich `d[1] == 8`
 - **Datei**: `src/mod_telemetry.cpp:507, 1172` (ELM-Pfad konsistent: mod_elm327.cpp:262)
 - **Problem**: setzt die ECU je zusätzliche Bits in dem Byte, wird „geparkt" nicht mehr erkannt. Nur am realen Bus verifizierbar — deshalb [RISIKO]/Beobachtung, kein blinder Fix.
-- **Fix**: Bit-Maske statt Exakt-Vergleich, nachdem am Fahrzeug geloggt wurde, welche Werte real auftreten.
+- **Fix**: Bit-Maske statt Exakt-Vergleich, nachdem am Fahrzeug geloggt wurde, welche Werte real auftreten. Seit 1.7.4 schreibt der Stick jeden neuen Wert einmal je Start ins Syslog.
 - **Schwere**: P3 · **Aufwand**: 10 min Code + Bus-Beobachtung
 
 ---
