@@ -7,14 +7,14 @@ For high-level structure see the [PlantUML diagrams](.) (`*.puml`).
 
 ## Telemetry store — raw partition ring buffer
 
-`mod_telem_store.cpp`. Custom 5 MB flash partition, no filesystem.
+`mod_telem_store.cpp`. Custom 3 MB flash partition (1 MB in the lite variant), no filesystem.
 
 ### Layout
 
 ```
 Slot         = 128 bytes (114 B payload + 1 B status + 13 B padding)
 Erase block  = 4 KB  →  32 slots per block
-Partition    = 5 MB  →  1280 blocks  →  40,960 slot capacity
+Partition    = 3 MB  →   768 blocks  →  24,576 slot capacity
 ```
 
 ### Slot status byte

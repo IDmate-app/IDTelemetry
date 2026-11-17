@@ -11,9 +11,8 @@ Born out of frustration: the VW ID.7 shows you almost nothing about what's happe
 ## What It Does
 
 - Reads battery, drivetrain and climate data from the CAN bus (UDS/ISO-TP)
-- Pushes telemetry to **InfluxDB** over LTE-M for Grafana dashboards
-- Buffers **~40,000 rows (~5,000 km)** in a dedicated 5 MB Flash partition — survives reboots, crashes and long radio dead zones
-- Tracks location via **Traccar** (OsmAnd protocol)
+- Sends AES-encrypted telemetry and position over LTE-M (MQTT) to [IDmate](https://github.com/IDmate-app/IDMate), or over WiFi when the car is home
+- Buffers **~24,500 rows** in a dedicated 3 MB Flash partition — survives reboots, crashes and long radio dead zones
 - Emulates a **BLE ELM327** so ABRP sees the car natively
 - Optionally sends **live telegrams over Bluetooth** to a paired display device in the car ([docs/live-ble.md](docs/live-ble.md), off by default)
 - Runs a **WiFi AP with a full Web-UI** for live data, config and debugging
@@ -23,7 +22,7 @@ Born out of frustration: the VW ID.7 shows you almost nothing about what's happe
 
 ![System Architecture](docs/architecture.png)
 
-The stick reads CAN data via UDS, persists every telemetry row to a dedicated 5 MB raw Flash partition (~40,000 rows ≈ 5,000 km offline buffer), pushes encrypted telemetry over LTE-M MQTT, exposes a BLE ELM327 emulation for ABRP, and serves a local Web-UI on its WiFi AP.
+The stick reads CAN data via UDS, persists every telemetry row to a dedicated 3 MB raw Flash partition (~24,500 rows offline buffer), pushes encrypted telemetry over LTE-M MQTT, exposes a BLE ELM327 emulation for ABRP, and serves a local Web-UI on its WiFi AP.
 
 - High-level structure: [`docs/*.puml`](docs/) — rendered with `plantuml`, themed via [`docs/_theme.puml`](docs/_theme.puml)
 - Step-by-step algorithms (telemetry store, MQTT escalation, sleep/wake, GPS capture): [`docs/algorithms.md`](docs/algorithms.md)
@@ -34,14 +33,15 @@ The 16 MB Flash is split into:
 
 | Partition | Size | Purpose |
 | --------- | ---- | ------- |
-| app0 | 2 MB | Firmware (Web-UI HTMLs are embedded inside) |
+| app0 | 2 MB | Firmware slot 1 (Web-UI HTMLs are embedded inside) |
+| app1 | 2 MB | Firmware slot 2 — web updates alternate between the two slots |
 | coredump | 64 KB | Crash dumps for post-mortem |
-| telem | 5 MB | Raw ring buffer for telemetry rows (no filesystem — atomic per-slot status byte) |
-| spiffs | 8.8 MB | Runtime logs only |
+| telem | 3 MB | Raw ring buffer for telemetry rows (no filesystem — atomic per-slot status byte) |
+| spiffs | 8.9 MB | Runtime logs only |
 
 HTMLs live inside the firmware binary, not in SPIFFS — they cannot be corrupted by log writes or filesystem issues. The telemetry ring buffer is crash-safe by design: each row is committed via a single status-byte flip, so a power loss mid-write loses at most one row.
 
-> ⚠️ **No OTA — USB flashing only.** The partition table has an `otadata` entry but only a single app slot (`app0`/`ota_0`, no `ota_1`, no `factory`). OTA updates are therefore impossible despite the misleading `otadata` presence — every firmware update is a USB re-flash. Any future partition-layout change forces a full re-flash with an erase of the `telem` partition, which loses the unsent backlog. Plan flash windows accordingly (keep the previous build as a rollback `.bin`).
+> **Firmware update over the web page** (since 1.6.0, *Config → Firmware Update*): the upload goes into the free slot, the running one stays as the way back. If the new firmware crashes three times in a row before it has run for 2 minutes, the stick starts the previous one again; a button switches back by hand. Since 1.7.3 every failure and the result of the update are in the syslog (`OTA`), and the page shows after the restart whether the new firmware runs. A partition-layout change (as from 1.5.x to 1.6.0) still needs one USB flash, which erases the `telem` partition — send the backlog first.
 
 <!-- -->
 
@@ -61,7 +61,7 @@ When MQTT or GPRS misbehave, the firmware escalates through four levels before g
 
 > ⚠️ **Board requirements**
 >
-> The firmware is built specifically for ESP32-S3 with **16 MB flash and 8 MB PSRAM** (the `N16R8` chip variant). Smaller flash or no-PSRAM boards will not boot — the partition table assumes a 16 MB layout, and the embedded Web UI plus the 5 MB raw telemetry partition do not fit in less. Plain ESP32 (non-S3) boards are not supported.
+> The firmware is built specifically for ESP32-S3 with **16 MB flash and 8 MB PSRAM** (the `N16R8` chip variant). Smaller flash or no-PSRAM boards will not boot — the partition table assumes a 16 MB layout, and the embedded Web UI plus the 3 MB raw telemetry partition do not fit in less. Plain ESP32 (non-S3) boards are not supported.
 
 | Component | Details |
 | --------- | ------- |
@@ -282,7 +282,7 @@ Two PlatformIO environments share the same source tree:
 
 | Env | Hardware | Includes | Status |
 | --- | -------- | -------- | ------ |
-| `s3_full` (default) | LILYGO T-SIM7080G-S3 | LTE-M modem, external GNSS, AXP2101 PMU, Li-Po, BLE, CAN, raw 5 MB telemetry buffer | ✅ production |
+| `s3_full` (default) | LILYGO T-SIM7080G-S3 | LTE-M modem, external GNSS, AXP2101 PMU, Li-Po, BLE, CAN, raw 3 MB telemetry buffer | ✅ production |
 | `s3_lite` | Plain ESP32-S3 (N16R8) with 16 MB flash | BLE ELM327, CAN, raw 1 MB telemetry buffer, WiFi-only upload | 🧪 scaffolding only — not yet runnable |
 
 Build with `pio run -e s3_full` or `pio run -e s3_lite`. The active env selects partition table and `FEATURE_*` compile flags. See [`platformio.ini`](platformio.ini).

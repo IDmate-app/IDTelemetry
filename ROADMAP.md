@@ -1,17 +1,21 @@
-# Roadmap Stick — nächste Schritte
+# Roadmap Stick
 
-Stand: 2026-11-06, Firmware auf GitHub: 1.4.0 (`main`).
+Stand: 2026-11-17, Firmware 1.7.3. Die Abschnitte unten sind der Planungsstand
+vom 2026-11-06 (Firmware 1.4.0) und bleiben als Begründung stehen. Was daraus
+geworden ist:
 
-**Vorbereitet auf Branch `next-1.5` (nicht geflasht, nicht released):** Punkt 1
-(Log-Fix), 0.6 (Build-Kennung), 2 bis auf die Formeln (Felder, Payload-Bits
-20–22, Info-Telegramm, eigenes Polling von 0x0364/0x2613 mit Rohbytes).
-IDmate liest das alles seit 1.2.255. Offen: Formeln in `decode_new_did()`
-(`src/mod_telemetry.cpp`) und Punkt 5. Erst nach dem Firmware-Abgleich (0)
-flashen.
+| Punkt | Stand |
+| ----- | ----- |
+| 0. Firmware-Stand abgleichen | erledigt (Build-Kennung aus `git describe` seit 1.5.0) |
+| 1. Logs abrufbar | erledigt (1.5.0) |
+| 2. Zusatzwerte an IDmate | erledigt (Energieinhalt, Nebenverbraucher, Innentemperatur; Formeln seit 1.6.7) |
+| 3. SoC-Formel Stick/ABRP | offen, Entscheid nach dem BMS-Lernen in IDmate |
+| 4. Reichweite vom CAN-Bus | offen |
+| 5. Funkloch-Hänger | erledigt (1.5.0, Wiederverbinden ohne Neustart seit 1.6.4) |
+| 6. Laden passiv mitlesen | Hörmodus ohne Spannung seit 1.6.2; ob am OBD-Port Verkehr ankommt, ist offen |
+| 7. Firmware-Update aus IDmate | erledigt: Web-Update seit 1.6.0, IDmate meldet und verlinkt neue Firmware; Ergebnis im Syslog seit 1.7.3 |
 
-Reihenfolge: erst **0** (wissen, was auf dem Stick läuft), dann **1** (Logs
-abrufbar) und **5** (Funkloch-Hänger), dann **2–4** (neue Werte). Ohne 0 und 1
-lässt sich 2 nicht entschlüsseln.
+Einzelheiten je Version: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
