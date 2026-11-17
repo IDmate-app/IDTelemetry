@@ -2,6 +2,7 @@
 #include "mod_sleep.h"
 #include "mod_logs.h"
 #include <Wire.h>
+#include "i2c_lock.h"
 #include <SPIFFS.h>
 
 // ============================================================
@@ -52,6 +53,8 @@ static float g_gyro_bias_z = 0.0f;
 
 // ── I2C Hilfsfunktionen ──────────────────────────────────────
 static bool mpu_write(uint8_t reg, uint8_t val) {
+    I2cGuard i2c;
+    if (!i2c.ok()) return false;
     Wire.beginTransmission(MPU6050_ADDR);
     Wire.write(reg);
     Wire.write(val);
@@ -59,6 +62,8 @@ static bool mpu_write(uint8_t reg, uint8_t val) {
 }
 
 static bool mpu_read(uint8_t reg, uint8_t* buf, uint8_t len) {
+    I2cGuard i2c;
+    if (!i2c.ok()) return false;
     Wire.beginTransmission(MPU6050_ADDR);
     Wire.write(reg);
     if (Wire.endTransmission(false) != 0) return false;

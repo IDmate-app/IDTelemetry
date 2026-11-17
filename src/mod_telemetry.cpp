@@ -580,6 +580,20 @@ static void decode_new_did(uint16_t did, const uint8_t* d, int n) {
 }
 
 // Dekodierung: DID-Rohdaten → Telemetrie-Cache
+// 1.7.3 (FIXES C.6): "Geparkt" wird am exakten Wert B == 8 erkannt. Ob die ECU
+// weitere Werte oder Bits liefert, ist ungeprueft. Jeden neuen Wert einmal je
+// Start ins Syslog schreiben, damit die Regel spaeter am realen Bus festgelegt
+// werden kann. Am Ergebnis aendert sich nichts.
+static void parked_seen(const uint8_t* d, int n) {
+    static uint8_t s_seen[32] = {0};   // Bitfeld ueber Byte B
+    uint8_t b = d[1];
+    if (s_seen[b >> 3] & (1u << (b & 7))) return;
+    s_seen[b >> 3] |= (uint8_t)(1u << (b & 7));
+    char m[64];
+    snprintf(m, sizeof(m), "0x210E neu: A=%02X B=%02X%s (geparkt = B==08)", d[0], b, n > 2 ? " +" : "");
+    syslog("CAN", m);
+}
+
 static void decode_did_response(uint16_t did, const uint8_t* d, int n) {
     switch (did) {
         case 0x1E3B:  // Spannung: A:B / 4
@@ -627,6 +641,7 @@ static void decode_did_response(uint16_t did, const uint8_t* d, int n) {
             break;
         case 0x210E:  // Geparkt: B == 8
             if (n >= 2) {
+                parked_seen(d, n);
                 telem_update(TELEM_IS_PARKED, (d[1] == 8) ? 1.f : 0.f, true);
             }
             break;
@@ -1314,6 +1329,7 @@ void telem_feed_did(uint16_t did, const uint8_t* data, int data_len, uint32_t re
             break;
         case 0x210E:  // Geparkt
             if (data_len >= 2) {
+                parked_seen(data, data_len);
                 telem_update(TELEM_IS_PARKED, (data[1] == 8) ? 1.f : 0.f, true);
             }
             break;

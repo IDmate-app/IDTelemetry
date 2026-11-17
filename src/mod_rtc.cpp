@@ -2,6 +2,7 @@
 #include "mod_sleep.h"
 #include "mod_logs.h"
 #include <Wire.h>
+#include "i2c_lock.h"
 #include "config.h"
 
 // ============================================================
@@ -61,6 +62,8 @@ void rtc_init() {
 }
 
 bool rtc_get_time(int& h, int& m, int& s) {
+    I2cGuard i2c;
+    if (!i2c.ok()) return false;
     Wire.beginTransmission(DS1307_ADDR);
     Wire.write(0x00);
     if (Wire.endTransmission() != 0) return false;
@@ -73,6 +76,8 @@ bool rtc_get_time(int& h, int& m, int& s) {
 }
 
 bool rtc_set_time(int h, int m, int s) {
+    I2cGuard i2c;
+    if (!i2c.ok()) return false;
     Wire.beginTransmission(DS1307_ADDR);
     Wire.write(0x00);
     Wire.write(dec2bcd(s) & 0x7F);  // CH=0 -> Uhr laeuft
@@ -107,6 +112,8 @@ static bool rtc_plausible(int y, int mo, int d, int h, int mi, int s) {
 }
 
 bool rtc_get_datetime(int& y, int& mo, int& d, int& h, int& mi, int& s) {
+    I2cGuard i2c;
+    if (!i2c.ok()) return false;
     Wire.beginTransmission(DS1307_ADDR);
     Wire.write(0x00);
     if (Wire.endTransmission() != 0) return false;
@@ -137,6 +144,8 @@ bool rtc_set_datetime(int y, int mo, int d, int h, int mi, int s) {
     int dow = (yy + yy/4 - yy/100 + yy/400 + t[mo-1] + d) % 7;
     dow = dow == 0 ? 7 : dow;  // DS1307: 1=Mo..7=So
 
+    I2cGuard i2c;
+    if (!i2c.ok()) return false;
     Wire.beginTransmission(DS1307_ADDR);
     Wire.write(0x00);
     Wire.write(dec2bcd(s) & 0x7F);      // CH=0
@@ -184,6 +193,8 @@ uint64_t rtc_unix_ms() {
 }
 
 bool rtc_is_running() {
+    I2cGuard i2c;
+    if (!i2c.ok()) return false;
     Wire.beginTransmission(DS1307_ADDR);
     Wire.write(0x00);
     Wire.endTransmission();

@@ -3,6 +3,16 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.4] – 2026-11-17
+
+### Fixed
+
+- **Shared I2C bus without a lock**: the RTC (DS1307) and the motion sensor (MPU-6050) share one bus. The bus driver only locks a single transfer, not the read-out afterwards, so the gyro task (every 100 ms) and the web server reading the clock could get each other's bytes – wrong motion values (which also gate CAN sending) or a wrong time. A common lock now keeps write, request and read-out together. The PMU is on its own bus and not affected.
+
+### Added
+
+- **Observation for "parked"** (DID `0x210E`): parked is still recognised by the exact value B = 8. Each value the car sends is written to the syslog once per start (`CAN`, "0x210E neu"), so the rule can be settled on real data later.
+
 ## [1.7.3] – 2026-11-17
 
 ### Fixed
