@@ -28,6 +28,9 @@ int can_isotp_query(uint32_t tx_id, uint32_t rx_id,
                     uint8_t* resp, uint16_t max_resp,
                     uint32_t timeout_ms);
 
+// 1.7.9: darf der Stick gerade senden (Spannung, Bewegung/Laden, kein Hoermodus)?
+bool can_tx_ok();
+
 // Senden
 bool can_tx(uint32_t id, uint8_t* data, uint8_t len, const char* label);
 

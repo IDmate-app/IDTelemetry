@@ -37,11 +37,41 @@ static constexpr uint32_t ECU_746_RESP    = 0x7B0;
 // Sendet UDS 0x22 DID-Anfrage, gibt Datenbytes in out[] zurück.
 // A=out[0], B=out[1], ... (nach 0x62+DID_H+DID_L).
 // Rückgabe: Anzahl Datenbytes oder -1 bei Fehler.
+// 1.7.9: Je abgefragter Kennung einmal je Start ins Syslog, was das Auto
+// antwortet: Datenbytes, Fehlercode (NRC) oder nichts. So zeigt sich z. B., ob
+// die Reichweite (0x0295) ueberhaupt kommt. "Keine Antwort" erst nach 3
+// Versuchen, ein einzelner Aussetzer zaehlt nicht.
+struct DidSeen { uint32_t ecu; uint16_t did; uint8_t state; uint8_t misses; };
+static DidSeen s_did_seen[24];
+static void did_outcome(uint32_t ecu, uint16_t did, int n, const uint8_t* resp) {
+    DidSeen* e = nullptr;
+    for (auto& x : s_did_seen) {
+        if (x.ecu == ecu && x.did == did) { e = &x; break; }
+        if (x.ecu == 0) { x.ecu = ecu; x.did = did; e = &x; break; }
+    }
+    if (!e || e->state) return;                       // voll oder schon gemeldet
+    char m[112];
+    if (n >= 3 && resp[0] == 0x62) {
+        int k = snprintf(m, sizeof(m), "DID 0x%04X @%08lX: Antwort", did, (unsigned long)ecu);
+        for (int i = 3; i < n && i < 11 && k < (int)sizeof(m) - 4; i++) k += snprintf(m + k, sizeof(m) - k, " %02X", resp[i]);
+        e->state = 1;
+    } else if (n >= 3 && resp[0] == 0x7F) {
+        snprintf(m, sizeof(m), "DID 0x%04X @%08lX: abgelehnt, NRC 0x%02X", did, (unsigned long)ecu, resp[2]);
+        e->state = 2;
+    } else {
+        if (++e->misses < 3) return;
+        snprintf(m, sizeof(m), "DID 0x%04X @%08lX: keine Antwort (3 Versuche)", did, (unsigned long)ecu);
+        e->state = 3;
+    }
+    syslog("CAN", m);
+}
+
 static int query_did(uint32_t req_id, uint32_t resp_id, uint16_t did,
                      uint8_t* out, uint16_t max_out) {
     uint8_t req[3]   = { 0x22, (uint8_t)(did >> 8), (uint8_t)(did & 0xFF) };
     uint8_t resp[64] = {};
     int n = can_isotp_query(req_id, resp_id, req, 3, resp, sizeof(resp), UDS_TIMEOUT_MS);
+    if (n != -1 || can_tx_ok()) did_outcome(req_id, did, n, resp);
     if (n < 4)         return -1;   // mind. 0x62 + DID_H + DID_L + 1 Datenbyte
     if (resp[0] != 0x62) return -1; // Negativ-Response oder Protokollfehler
     int data_len = n - 3;           // 3 Header-Bytes (0x62, DID_H, DID_L) abziehen

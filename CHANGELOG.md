@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.9] – 2026-11-19
+
+### Added
+
+- **What the car answers per identifier**: once per start, for every identifier the stick polls, the syslog (`CAN`) shows the answer bytes, the rejection code (NRC) or "keine Antwort" after three tries. The range (`0x0295`) never arrived in IDmate; this shows whether the car answers it at all.
+- **DID search** on the Debug page: reads every identifier of a range on a chosen control unit (read only, only while the car is awake) and lists the answers. With the range shown in the car entered, answers that contain the value (one or two bytes, also scaled ×10, ÷2, ÷4, ±3) are marked as hits; repeating after the range changed narrows it down. Needs the login from 1.7.8.
+
 ## [1.7.8] – 2026-11-19
 
 ### Added

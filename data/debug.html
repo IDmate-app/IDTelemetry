@@ -234,6 +234,29 @@
   </div>
   <div class="log-box" id="mqtt-preview" style="max-height:180px;white-space:pre">Lade...</div>
 
+  <!-- 1.7.9: DID-Suche (z. B. Reichweite) -->
+  <div class="section-title" style="margin-top:16px" data-i18n="dbg.ds_title">DID-Suche (Reichweite)</div>
+  <div class="card" style="font-size:11px">
+    <div style="color:var(--muted);margin-bottom:6px;line-height:1.5" data-i18n="dbg.ds_desc">Fragt alle Kennungen eines Bereichs nur lesend ab. Auto wach (Z&#252;ndung an, im Stand), angezeigte Reichweite eintragen: Antworten, in denen der Wert vorkommt, werden als Treffer markiert. Danach die Reichweite &#228;ndern (ein St&#252;ck fahren) und erneut suchen &#8211; was beide Male passt, ist es.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <select id="ds-ecu" style="flex:1;min-width:160px">
+        <option value="17FC007B/17FE007B">17FC007B (Batterie/Antrieb)</option>
+        <option value="17FC0076/17FE0076">17FC0076</option>
+        <option value="714/77E">714 (Kombiinstrument)</option>
+        <option value="710/77A">710 (Gateway)</option>
+        <option value="746/7B0">746 (Klima)</option>
+        <option value="7E0/7E8">7E0 (Motor)</option>
+      </select>
+      <input id="ds-from" value="0200" maxlength="4" style="width:58px" title="von (hex)">
+      <input id="ds-to" value="02FF" maxlength="4" style="width:58px" title="bis (hex)">
+      <input id="ds-target" type="number" min="0" max="2000" style="width:80px" data-i18n-ph="dbg.ds_target" placeholder="km Anzeige">
+      <button class="btn accent" style="font-size:11px;padding:3px 10px" onclick="dsStart()" data-i18n="dbg.ds_start">Suchen</button>
+      <button class="btn danger" style="font-size:11px;padding:3px 10px" onclick="dsAbort()" data-i18n="dbg.ds_abort">Stopp</button>
+    </div>
+    <div id="ds-status" style="margin-top:6px;color:var(--muted)"></div>
+    <div class="log-box" id="ds-hits" style="max-height:200px;white-space:pre;margin-top:6px;display:none"></div>
+  </div>
+
   <!-- System Log -->
   <div class="section-title" style="margin-top:16px" data-i18n="dbg.syslog_title">System Log
     <button class="btn danger" style="margin-left:auto;font-size:10px;padding:2px 10px" onclick="clearSysLog()">&#x2715; L&ouml;schen</button>
@@ -740,6 +763,36 @@ async function loadMqttPreview() {
 var _logCan=false;
 var _tiEl=null;
 
+// ── 1.7.9: DID-Suche ──
+var _dsTimer=null;
+async function dsStart(){
+  var e=document.getElementById('ds-ecu').value.split('/');
+  var tg=document.getElementById('ds-target').value;
+  var body={req:e[0],resp:e[1],from:document.getElementById('ds-from').value.trim(),to:document.getElementById('ds-to').value.trim(),target:tg===''?-1:parseInt(tg)};
+  try{
+    var r=await fetch('/api/did-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(r.status===401){toast(t('dbg.ds_auth'),false);return;}
+    var d=await r.json();
+    if(!d.ok){toast(t('dbg.ds_busy'),false);return;}
+    dsPoll();
+  }catch(_){toast(t('dbg.ds_busy'),false);}
+}
+async function dsAbort(){try{await fetch('/api/did-search/abort',{method:'POST'});}catch(_){}}
+async function dsPoll(){
+  clearTimeout(_dsTimer);
+  try{
+    var d=await(await fetch('/api/did-search')).json();
+    var st=document.getElementById('ds-status');
+    if(d.running||d.answers||d.nrc||d.silent){
+      var tot=d.to-d.from+1, done=d.pos-d.from+(d.running?0:1);
+      st.textContent=(d.running?(d.paused?t('dbg.ds_paused'):t('dbg.ds_running')):t('dbg.ds_done'))+' · 0x'+d.pos.toString(16).toUpperCase()+' · '+done+'/'+tot+' · '+t('dbg.ds_counts',[d.answers,d.nrc,d.silent]);
+    }
+    var h=document.getElementById('ds-hits');
+    if(d.hits&&d.hits.length){h.style.display='';h.textContent=d.hits.map(function(x){return (x.match?'\u2605 ':'  ')+'0x'+x.did+': '+x.hex;}).join('\n');}
+    if(d.running)_dsTimer=setTimeout(dsPoll,1500);
+  }catch(_){_dsTimer=setTimeout(dsPoll,3000);}
+}
+
 async function loadLogConfig() {
   try {
     var d = await (await fetch('/api/config')).json();
@@ -752,7 +805,7 @@ async function loadLogConfig() {
 
 // ── Init (gestaffelt) ─────────────────────────────────────
 loadRtcTime();
-setTimeout(function(){ loadWifiResult(); loadLogConfig(); }, 1500);
+setTimeout(function(){ loadWifiResult(); loadLogConfig(); dsPoll(); }, 1500);
 setTimeout(function(){ loadSysLog(); }, 3000);
 setTimeout(function(){ loadMqttPreview(); }, 4500);
 var _tiRtc=setInterval(loadRtcTime,30000);

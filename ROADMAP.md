@@ -1,6 +1,6 @@
 # Roadmap Stick
 
-Stand: 2026-11-19, Firmware 1.7.8. Die Abschnitte unten sind der Planungsstand
+Stand: 2026-11-19, Firmware 1.7.9. Die Abschnitte unten sind der Planungsstand
 vom 2026-11-06 (Firmware 1.4.0) und bleiben als Begründung stehen. Was daraus
 geworden ist:
 
@@ -206,6 +206,11 @@ Absturzschutz (3 Abstürze → vorherige Firmware) und Rückweg-Knopf.
 Der Stick liest die Reichweite (`0x0295`) schon mit; IDmate speichert sie seit
 1.2.254 bei jedem BMS-Lernpunkt (`can_range`). Ist sie dauerhaft gleich der
 Display-Reichweite, kann die manuelle Eingabe der km entfallen.
+
+Stand 19.11.2026: In IDmate kam nie ein Wert an; ABRP fragt `0x0295` nicht
+ab, die Kennung ist unbestätigt. Seit 1.7.9 meldet das Syslog je Kennung, was
+das Auto antwortet, und die Debug-Seite hat eine DID-Suche mit Abgleich gegen
+die angezeigte Reichweite.
 
 ---
 

@@ -21,6 +21,7 @@
 #include <esp_ota_ops.h>
 #include "mod_ota.h"
 #include "mod_auth.h"
+#include "mod_didsearch.h"
 
 // ── Eingebettete Web-Assets ─────────────────────────────────
 // Linker-Symbole von board_build.embed_txtfiles in platformio.ini.
@@ -741,6 +742,33 @@ void ble_web_routes_init() {
             r->send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
         }
     );
+
+    // ── DID-Suche (1.7.9, mod_didsearch) ───────────────────────
+    server.on("/api/did-search", HTTP_GET, [](AsyncWebServerRequest* r) {
+        JsonDocument doc;
+        didsearch_status(doc);
+        String out; serializeJson(doc, out);
+        r->send(200, "application/json", out);
+    });
+    server.on("/api/did-search", HTTP_POST, [](AsyncWebServerRequest* r) {},
+        nullptr,
+        [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            if (!auth_ok(r)) { auth_deny(r); return; }
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) { r->send(400, "application/json", "{\"ok\":false}"); return; }
+            uint32_t req  = strtoul(doc["req"]  | "17FC007B", nullptr, 16);
+            uint32_t resp = strtoul(doc["resp"] | "17FE007B", nullptr, 16);
+            uint16_t from = (uint16_t)strtoul(doc["from"] | "0200", nullptr, 16);
+            uint16_t to   = (uint16_t)strtoul(doc["to"]   | "02FF", nullptr, 16);
+            int target    = doc["target"] | -1;
+            bool ok = didsearch_start(req, resp, from, to, target);
+            r->send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false,\"err\":\"busy_or_range\"}");
+        }
+    );
+    server.on("/api/did-search/abort", HTTP_POST, [](AsyncWebServerRequest* r) {
+        didsearch_abort();
+        r->send(200, "application/json", "{\"ok\":true}");
+    });
 
     // ── Anmeldung (1.7.8, mod_auth) ────────────────────────────
     server.on("/api/login", HTTP_POST, [](AsyncWebServerRequest* r) {},

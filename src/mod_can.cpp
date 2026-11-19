@@ -50,6 +50,8 @@ static bool can_tx_allowed() {
     return hold;
 }
 
+bool can_tx_ok() { return can_running && can_tx_allowed(); }
+
 // ============================================================
 //  mod_can - CAN Bus, UDS, OBD2, Scanner
 // ============================================================
