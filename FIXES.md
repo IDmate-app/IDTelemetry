@@ -225,10 +225,10 @@ Diese Fixes berühren Modem-Power, Sleep-Pfade, AP-Handling oder Cross-Core-Conc
 - **Fix**: globaler I2C-Mutex um alle Wire-Transaktionen (gyro + rtc + ggf. compass). → erledigt in 1.7.4 (`src/i2c_lock.h`).
 - **Schwere**: P2 · **Aufwand**: mittel + Testaufbau (Timing!)
 
-### [ ] C.6 — `is_parked` über exakten Byte-Vergleich `d[1] == 8`
+### [x] C.6 — `is_parked` über exakten Byte-Vergleich `d[1] == 8`
 - **Datei**: `src/mod_telemetry.cpp:507, 1172` (ELM-Pfad konsistent: mod_elm327.cpp:262)
 - **Problem**: setzt die ECU je zusätzliche Bits in dem Byte, wird „geparkt" nicht mehr erkannt. Nur am realen Bus verifizierbar — deshalb [RISIKO]/Beobachtung, kein blinder Fix.
-- **Fix**: Bit-Maske statt Exakt-Vergleich, nachdem am Fahrzeug geloggt wurde, welche Werte real auftreten. Seit 1.7.4 schreibt der Stick jeden neuen Wert einmal je Start ins Syslog.
+- **Fix**: Bit-Maske statt Exakt-Vergleich, nachdem am Fahrzeug geloggt wurde, welche Werte real auftreten. Seit 1.7.4 schreibt der Stick jeden neuen Wert einmal je Start ins Syslog. → erledigt in 1.7.5: Gesehen 08 (P), 07 (R), 05 (D), 0C (P + Bit 0x04); Regel jetzt `B & 0x08`.
 - **Schwere**: P3 · **Aufwand**: 10 min Code + Bus-Beobachtung
 
 ---

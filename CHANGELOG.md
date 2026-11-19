@@ -3,6 +3,16 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.5] – 2026-11-19
+
+### Changed
+
+- **"Parked" from the gear bit** (DID `0x210E`): byte B carries the gear. Seen on the car: `08` = P, `07` = R, `05` = D, and `0C` = P with an extra bit after switching off. Parked is now B & 0x08 instead of the exact value 8, so `0C` counts as parked as well. New values still go to the syslog once per start, now with the result.
+
+### Added
+
+- **Which task hangs on sleep**: when tasks do not stop in time before deep sleep, the syslog warning now names them ("Task-Timeout — erzwinge Stop (…)").
+
 ## [1.7.4] – 2026-11-17
 
 ### Fixed

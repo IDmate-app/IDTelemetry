@@ -580,17 +580,19 @@ static void decode_new_did(uint16_t did, const uint8_t* d, int n) {
 }
 
 // Dekodierung: DID-Rohdaten → Telemetrie-Cache
-// 1.7.3 (FIXES C.6): "Geparkt" wird am exakten Wert B == 8 erkannt. Ob die ECU
-// weitere Werte oder Bits liefert, ist ungeprueft. Jeden neuen Wert einmal je
-// Start ins Syslog schreiben, damit die Regel spaeter am realen Bus festgelegt
-// werden kann. Am Ergebnis aendert sich nichts.
+// 1.7.5 (FIXES C.6): Byte B von 0x210E traegt die Fahrstufe. Am Fahrzeug
+// gesehen: 08 = P, 07 = R, 05 = D, 0C = P mit Zusatzbit 0x04 (nach dem
+// Abstellen). Nur P hat Bit 0x08, daher "geparkt" = (B & 0x08). Jeden neuen
+// Wert weiter einmal je Start ins Syslog schreiben (Laden noch ungesehen).
+static inline bool parked_from_b(uint8_t b) { return (b & 0x08) != 0; }
 static void parked_seen(const uint8_t* d, int n) {
     static uint8_t s_seen[32] = {0};   // Bitfeld ueber Byte B
     uint8_t b = d[1];
     if (s_seen[b >> 3] & (1u << (b & 7))) return;
     s_seen[b >> 3] |= (uint8_t)(1u << (b & 7));
     char m[64];
-    snprintf(m, sizeof(m), "0x210E neu: A=%02X B=%02X%s (geparkt = B==08)", d[0], b, n > 2 ? " +" : "");
+    snprintf(m, sizeof(m), "0x210E neu: A=%02X B=%02X%s (geparkt = B&08: %s)", d[0], b, n > 2 ? " +" : "",
+             parked_from_b(b) ? "ja" : "nein");
     syslog("CAN", m);
 }
 
@@ -639,10 +641,10 @@ static void decode_did_response(uint16_t did, const uint8_t* d, int n) {
                 telem_update(TELEM_SOC, v, plausible(v, -5.f, 105.f));
             }
             break;
-        case 0x210E:  // Geparkt: B == 8
+        case 0x210E:  // Geparkt: B & 0x08 (Fahrstufe P)
             if (n >= 2) {
                 parked_seen(d, n);
-                telem_update(TELEM_IS_PARKED, (d[1] == 8) ? 1.f : 0.f, true);
+                telem_update(TELEM_IS_PARKED, parked_from_b(d[1]) ? 1.f : 0.f, true);
             }
             break;
         case 0x295A:  // Odometer: A:B:C (24-bit)
@@ -1330,7 +1332,7 @@ void telem_feed_did(uint16_t did, const uint8_t* data, int data_len, uint32_t re
         case 0x210E:  // Geparkt
             if (data_len >= 2) {
                 parked_seen(data, data_len);
-                telem_update(TELEM_IS_PARKED, (data[1] == 8) ? 1.f : 0.f, true);
+                telem_update(TELEM_IS_PARKED, parked_from_b(data[1]) ? 1.f : 0.f, true);
             }
             break;
         case 0x295A:  // Odometer

@@ -333,7 +333,20 @@ static void enter_deep_sleep(const char* reason) {
     if (all_stopped) {
         syslog("SLEEP", "Deep Sleep: Shutdown abgeschlossen");
     } else {
-        syslog("SLEEP", "WARNUNG: Task-Timeout — erzwinge Stop");
+        // 1.7.5: Namen der noch laufenden Tasks mitloggen (Diagnose I-008)
+        char names[96] = "";
+        size_t pos = 0;
+        for (auto name : task_names) {
+            TaskHandle_t h = xTaskGetHandle(name);
+            if (h && h != caller && pos < sizeof(names) - 1) {
+                int w = snprintf(names + pos, sizeof(names) - pos, "%s%s", pos ? "," : "", name);
+                if (w > 0) pos += (size_t)w;
+            }
+        }
+        if (pos >= sizeof(names)) pos = sizeof(names) - 1;
+        char msg[160];
+        snprintf(msg, sizeof(msg), "WARNUNG: Task-Timeout — erzwinge Stop (%s)", names);
+        syslog("SLEEP", msg);
         for (auto name : task_names) {
             TaskHandle_t h = xTaskGetHandle(name);
             if (h && h != caller) vTaskDelete(h);

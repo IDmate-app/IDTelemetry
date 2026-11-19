@@ -261,7 +261,7 @@ static bool elm_cache_response(uint16_t did, float val, String& out) {
             b[11] = (uint8_t)( raw        & 0xFF);
             len = 12; break;
         }
-        case 0x210E: { // Geparkt: 2 Bytes, B == 8 → parked
+        case 0x210E: { // Geparkt: 2 Bytes, Bit 0x08 in B = P (wie mod_telemetry)
             b[0] = 0x00;
             b[1] = (val > 0.5f) ? 0x08 : 0x00;
             len = 2; break;
