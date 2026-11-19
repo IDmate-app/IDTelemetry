@@ -127,6 +127,8 @@
   "cfg.ota_same": "Update not applied \u2014 still running {0}. See the syslog (OTA, BOOT, PANIC)",
   "cfg.ota_last_ok": "Last update: {0}",
   "cfg.ota_last_same": "Last update not applied, {0} kept running",
+  "cfg.ota_again": "\u2713 Same firmware installed again: {0}",
+  "cfg.ota_last_again": "Last update: same firmware {0} installed again",
   "cfg.ota_last_rolled": "Last update: new firmware crashed, back to {0} (syslog: PANIC)",
   "cfg.ota_last_err": "Last update failed: {0}",
   "cfg.loaded": "Loaded",

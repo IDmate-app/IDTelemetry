@@ -1,12 +1,12 @@
 # Roadmap Stick
 
-Stand: 2026-11-19, Firmware 1.7.6. Die Abschnitte unten sind der Planungsstand
+Stand: 2026-11-19, Firmware 1.7.7. Die Abschnitte unten sind der Planungsstand
 vom 2026-11-06 (Firmware 1.4.0) und bleiben als Begründung stehen. Was daraus
 geworden ist:
 
 | Punkt | Stand |
 | ----- | ----- |
-| 0. Firmware-Stand abgleichen | erledigt (Build-Kennung aus `git describe` seit 1.5.0) |
+| 0. Firmware-Stand abgleichen | erledigt (Build-Kennung aus git seit 1.5.0; seit 1.7.7 `<Version>-g<Commit>`) |
 | 1. Logs abrufbar | erledigt (1.5.0) |
 | 2. Zusatzwerte an IDmate | erledigt (Energieinhalt, Nebenverbraucher, Innentemperatur; Formeln seit 1.6.7) |
 | 3. SoC-Formel Stick/ABRP | offen, Entscheid nach dem BMS-Lernen in IDmate |

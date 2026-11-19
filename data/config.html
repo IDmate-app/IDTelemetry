@@ -379,7 +379,7 @@
 async function fetchStatus(){
   try{
     var d=await(await fetch('/status')).json();
-    if(d.fw_version){var v=document.getElementById('fw-ver');if(v){var b=d.fw_build&&d.fw_build!==d.fw_version?' · '+d.fw_build:'';v.textContent='v'+d.fw_version+(d.fw_variant?' '+d.fw_variant:'')+b;v.title='Build '+(d.fw_build||d.fw_version);if(b.indexOf('dirty')>=0)v.style.color='var(--orange)';}otaCheck(d.fw_build||d.fw_version);}
+    if(d.fw_version){var v=document.getElementById('fw-ver');if(v){var b=d.fw_build&&d.fw_build!==d.fw_version?' · '+d.fw_build:'';v.textContent='v'+d.fw_version+(d.fw_variant?' '+d.fw_variant:'')+b;v.title='Build '+(d.fw_build||d.fw_version);if(b.indexOf('dirty')>=0)v.style.color='var(--orange)';}otaCheck(d.fw_build||d.fw_version,d.ota_last);}
     if(d.ota_possible===false){var od=document.getElementById('ota-drop'),ob=document.getElementById('btn-ota'),os=document.getElementById('ota-status'),op=document.getElementById('ota-pw');
       if(od)od.style.display='none';if(ob)ob.style.display='none';if(op)op.style.display='none';if(os)os.textContent=t('cfg.ota_unavailable');}
     else if(d.ota_slot){var sl=document.getElementById('ota-slot');if(sl)sl.textContent=t('cfg.ota_slot',[d.ota_slot]);
@@ -580,7 +580,7 @@ var _fwBuild='';
 // 1.7.3: Nach dem Neustart pruefen, ob die neue Firmware wirklich laeuft.
 // Vor dem Upload merkt sich die Seite den laufenden Build; aendert er sich
 // nicht, war das Update nicht erfolgreich (abgebrochen oder Rueckfall).
-function otaCheck(build){
+function otaCheck(build,last){
   _fwBuild=build||'';
   var from=sessionStorage.getItem('ota_from');
   if(from===null||!build)return;
@@ -589,6 +589,10 @@ function otaCheck(build){
   if(build!==from){
     toast(t('cfg.ota_now',[build]));
     if(st){st.style.color='var(--green)';st.textContent=t('cfg.ota_now',[build]);}
+  }else if(last&&last.indexOf('again:')===0){
+    // 1.7.7: dieselbe Firmware nochmal aufgespielt, Platz gewechselt — kein Fehler
+    toast(t('cfg.ota_again',[build]));
+    if(st){st.style.color='var(--green)';st.textContent=t('cfg.ota_again',[build]);}
   }else{
     toast(t('cfg.ota_same',[build]),false);
     if(st){st.style.color='var(--red)';st.textContent='\u2717 '+t('cfg.ota_same',[build]);}
@@ -599,6 +603,7 @@ function otaLastText(l){
   var i=l.indexOf(':'),k=i<0?l:l.slice(0,i),v=i<0?'':l.slice(i+1);
   if(k==='ok')return t('cfg.ota_last_ok',[v.replace('>',' \u2192 ')]);
   if(k==='same')return t('cfg.ota_last_same',[v]);
+  if(k==='again')return t('cfg.ota_last_again',[v]);
   if(k==='rolled')return t('cfg.ota_last_rolled',[v]);
   if(k==='err'){var w=t('cfg.ota_err_'+v);if(w==='cfg.ota_err_'+v)w=v;return t('cfg.ota_last_err',[w]);}
   return l;

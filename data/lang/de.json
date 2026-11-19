@@ -127,6 +127,8 @@
   "cfg.ota_same": "Update nicht \u00fcbernommen \u2014 es l\u00e4uft weiter {0}. Grund im Syslog (OTA, BOOT, PANIC)",
   "cfg.ota_last_ok": "Letztes Update: {0}",
   "cfg.ota_last_same": "Letztes Update nicht \u00fcbernommen, es lief weiter {0}",
+  "cfg.ota_again": "\u2713 Gleiche Firmware erneut aufgespielt: {0}",
+  "cfg.ota_last_again": "Letztes Update: gleiche Firmware {0} erneut aufgespielt",
   "cfg.ota_last_rolled": "Letztes Update: neue Firmware ist abgest\u00fcrzt, zur\u00fcck auf {0} (Syslog: PANIC)",
   "cfg.ota_last_err": "Letztes Update fehlgeschlagen: {0}",
   "cfg.loaded": "Geladen",

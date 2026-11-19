@@ -24,7 +24,9 @@ static size_t      s_bytes  = 0;
 // rolled:<build>, err:<code>. "busy" ist waehrend des Uploads gesetzt: steht es
 // beim Start noch, ist der Upload abgebrochen (Verbindung weg, Neustart).
 // "prev" ist der Build vor dem Update: daran sieht der naechste Start, ob die
-// neue Firmware wirklich laeuft.
+// neue Firmware wirklich laeuft. 1.7.7: "pslot" ist der Platz vor dem Update.
+// Gleicher Build, aber anderer Platz = dieselbe Firmware erneut aufgespielt
+// (again:<build>), kein Fehler. Gleicher Build und gleicher Platz = same.
 static void ota_note(const char* last) {
     Preferences p;
     if (!p.begin(OTA_NS, false)) return;
@@ -117,6 +119,8 @@ void ota_boot_log() {
     if (busy) p.putBool("busy", false);
     String prev = p.getString("prev", "");
     if (prev.length()) p.remove("prev");
+    String pslot = p.getString("pslot", "");
+    if (pslot.length()) p.remove("pslot");
     p.end();
     char m[96];
     snprintf(m, sizeof(m), "Platz %s · zweiter Platz %s", run ? run->label : "?",
@@ -134,6 +138,10 @@ void ota_boot_log() {
         if (prev != FW_BUILD) {
             snprintf(m, sizeof(m), "Update uebernommen: %s -> %s", prev.c_str(), FW_BUILD);
             snprintf(l, sizeof(l), "ok:%s>%s", prev.c_str(), FW_BUILD);
+        } else if (pslot.length() && run && pslot != run->label) {
+            snprintf(m, sizeof(m), "Gleiche Firmware erneut aufgespielt: %s (Platz %s -> %s)",
+                     FW_BUILD, pslot.c_str(), run->label);
+            snprintf(l, sizeof(l), "again:%s", FW_BUILD);
         } else {
             snprintf(m, sizeof(m), "Update NICHT uebernommen: es laeuft weiter %s", FW_BUILD);
             snprintf(l, sizeof(l), "same:%s", FW_BUILD);
@@ -233,6 +241,8 @@ bool ota_upload_end() {
         p.putUChar("fails", 0);
         p.putBool("busy", false);
         p.putString("prev", FW_BUILD);
+        const esp_partition_t* run = esp_ota_get_running_partition();
+        p.putString("pslot", run ? run->label : "");
         p.end();
     }
     char m[96];

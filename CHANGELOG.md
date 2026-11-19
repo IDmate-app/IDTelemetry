@@ -3,6 +3,16 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.7] – 2026-11-19
+
+### Fixed
+
+- **Same firmware uploaded again reported as failed**: installing the running firmware once more switched the slot as it should, but the next start said "Update NICHT uebernommen" and the page showed a red cross, because only the build string was compared. The stick now also remembers the slot before the update: same build in the other slot is reported as "Gleiche Firmware erneut aufgespielt", in green on the page.
+
+### Changed
+
+- **Build ID starts with the own version**: `<version>-g<commit>` (e.g. `1.7.7-gabc1234`, `-dirty` for uncommitted code) instead of `git describe`. The release tag is created only after the build, so 1.7.6 was called "1.7.5-1-gb5594b5".
+
 ## [1.7.6] – 2026-11-19
 
 ### Added
