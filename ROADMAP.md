@@ -1,6 +1,6 @@
 # Roadmap Stick
 
-Stand: 2026-11-19, Firmware 1.7.5. Die Abschnitte unten sind der Planungsstand
+Stand: 2026-11-19, Firmware 1.7.6. Die Abschnitte unten sind der Planungsstand
 vom 2026-11-06 (Firmware 1.4.0) und bleiben als Begründung stehen. Was daraus
 geworden ist:
 
@@ -12,7 +12,7 @@ geworden ist:
 | 3. SoC-Formel Stick/ABRP | offen, Entscheid nach dem BMS-Lernen in IDmate |
 | 4. Reichweite vom CAN-Bus | offen |
 | 5. Funkloch-Hänger | erledigt (1.5.0, Wiederverbinden ohne Neustart seit 1.6.4) |
-| 6. Laden passiv mitlesen | Hörmodus ohne Spannung seit 1.6.2; ob am OBD-Port Verkehr ankommt, ist offen |
+| 6. Laden passiv mitlesen | geklärt: Bei abgeschlossenem Auto liegt am OBD-Port keine Spannung an, der Bus ist still. Sitzt jemand im Auto, liest der Stick und schreibt seit 1.7.6 beim Laden Zeilen (DC 15 s, AC 60 s) |
 | 7. Firmware-Update aus IDmate | erledigt: Web-Update seit 1.6.0, IDmate meldet und verlinkt neue Firmware; Ergebnis im Syslog seit 1.7.3 |
 
 Einzelheiten je Version: [CHANGELOG.md](CHANGELOG.md).

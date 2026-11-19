@@ -171,6 +171,20 @@ static float bearing_deg(double lat1, double lon1, double lat2, double lon2) {
     return h;
 }
 
+// 1.7.6: Laedt das Auto (Ladestatus 0x7448 frisch, < 60 s), Abstand der
+// Lade-Zeilen: DC 15 s, AC 60 s. 0 = laedt nicht. Bis 1.7.5 entstanden
+// Zeilen nur bei Bewegung (Strecke, Kurve, Zeit ab 3 km/h) — beim Laden im
+// Stand also keine, obwohl der Stick las (Schnellladung 19.11.2026: zwei
+// Zeilen in 17 min).
+static uint32_t charge_capture_interval_ms() {
+    float c = 0, dc = 0;
+    uint32_t age = 0;
+    if (!telem_get_latest(TELEM_IS_CHARGING, &c, &age) || c < 0.5f || age > 60000UL) return 0;
+    if (telem_get_latest(TELEM_IS_DCFC, &dc, &age) && dc > 0.5f && age <= 60000UL)
+        return TELEM_CHARGE_DC_INTERVAL_MS;
+    return TELEM_CHARGE_AC_INTERVAL_MS;
+}
+
 // ── GPS-getriggerter Zeilen-Capture ─────────────────────────
 // Wird alle 3s aus telem_task aufgerufen.
 // Sequentielle Prüfung: Distanz → Yaw-Peak → Zeit (first-match wins).
@@ -185,7 +199,13 @@ static void row_try_capture() {
     // verschiedenen Fixes (gps_update() läuft auf dem anderen Core; bei 100 km/h
     // / 1-Hz-GPS ~28 m Versatz zwischen getrennten Spinlock-Reads).
     GpsSnapshot gps = gps_snapshot();
-    if (!gps.valid) { s_yaw_peak = 0.0f; xSemaphoreGive(s_capture_mtx); return; }
+    uint32_t charge_iv = charge_capture_interval_ms();
+    if (!gps.valid) {
+        // 1.7.6: Laden ohne GPS-Fix (Tiefgarage, Halle): letzte Zeilen-Position
+        // nehmen, das Auto steht ja. Ohne Ladung bleibt es beim Abbruch.
+        if (charge_iv == 0 || s_cap_ms == 0) { s_yaw_peak = 0.0f; xSemaphoreGive(s_capture_mtx); return; }
+        gps.lat = s_cap_lat; gps.lon = s_cap_lon; gps.speed_kmh = 0.0f; gps.course_deg = 0.0f;
+    }
 
     double   lat     = gps.lat;
     double   lon     = gps.lon;
@@ -243,6 +263,9 @@ static void row_try_capture() {
     }
     if (!do_capture && elapsed >= TELEM_GPS_MAX_INTERVAL_MS && spd >= TELEM_GPS_MIN_SPEED_KMH) {
         do_capture = true; reason = "Zeit";
+    }
+    if (!do_capture && charge_iv > 0 && elapsed >= charge_iv) {
+        do_capture = true; reason = "Laden";
     }
 
     // Peak zurücksetzen

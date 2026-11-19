@@ -3,6 +3,12 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.6] – 2026-11-19
+
+### Added
+
+- **Charging curve**: while the car is charging, the stick now also writes rows when standing still – every 15 s on a fast charger (DC), every minute on AC. Up to now rows only came from driving (distance, curve, or every minute above 3 km/h), so a charge with someone in the car showed up in IDmate as just two or three rows although the stick was reading all the time. Without a GPS fix (garage, hall) a charging row takes the last row's position.
+
 ## [1.7.5] – 2026-11-19
 
 ### Changed

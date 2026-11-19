@@ -6,7 +6,7 @@
 //  Hardware: LILYGO T-SIM7080G-S3 (ESP32-S3-WROOM-1-N16R8) + SN65HVD230
 // ============================================================
 
-#define FW_VERSION  "1.7.5"
+#define FW_VERSION  "1.7.6"
 
 // Build-Kennung (git describe), von scripts/build_id.py gesetzt; ohne Script
 // (z. B. Arduino-IDE) gleich der Version. Variante: "full" / "lite".
@@ -68,6 +68,9 @@
 //    <50 km/h → 100m, 50-80 → 150m, 80-110 → 200m, >110 → 250m
 #define TELEM_GPS_MAX_INTERVAL_MS 60000UL // Zeit-Trigger: max. 1 Minute ohne Punkt
 #define TELEM_GPS_MIN_SPEED_KMH    3.0f   // Zeit-Trigger nur ab dieser Geschwindigkeit
+// 1.7.6: Beim Laden auch im Stand Zeilen schreiben (Ladekurve fuer IDmate)
+#define TELEM_CHARGE_DC_INTERVAL_MS 15000UL // Schnellladen: alle 15 s
+#define TELEM_CHARGE_AC_INTERVAL_MS 60000UL // AC-Laden: jede Minute
 #define TELEM_YAW_TURN_DPS          6     // Kurven-Trigger (Gyro/Yaw): Drehrate in °/s
 #define TELEM_CURVE_COOLDOWN_MS  2000UL   // Kurven-Cooldown: kein neuer Kurven-Trigger für 3s
 
