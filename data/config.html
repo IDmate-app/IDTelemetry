@@ -51,6 +51,19 @@
   <!-- 1.6.3: kein eigener AES-Schluessel -->
   <div class="card" id="aes-alarm" style="display:none;border-color:var(--red);color:var(--red);font-size:12px;line-height:1.5;margin-top:12px" data-i18n="cfg.aes_alarm">&#9888; Kein AES-Schl&#252;ssel eingetragen. Der Stick sendet NICHTS, bis unter MQTT Broker der Schl&#252;ssel von IDmate eingetragen und gespeichert ist. Die Daten bleiben bis dahin im Puffer.</div>
 
+  <!-- 1.7.8: Anmeldung (mod_auth) -->
+  <div class="card" id="auth-card" style="display:none;border-color:var(--orange)">
+    <div style="font-size:12px;line-height:1.5;margin-bottom:8px" data-i18n="cfg.auth_hint">Einstellungen sind gesch&#252;tzt. Mit dem WLAN-Passwort des Sticks anmelden, um Passw&#246;rter zu sehen und zu speichern. Passwort vergessen: Boot-Taste im laufenden Betrieb 5 s halten, dann 3 min ohne Passwort.</div>
+    <div style="display:flex;gap:6px">
+      <input type="password" id="auth-pw" style="flex:1" autocomplete="current-password" data-i18n-ph="cfg.auth_pw" placeholder="WLAN-Passwort des Sticks">
+      <button type="button" class="btn accent" onclick="authLogin()" data-i18n="cfg.auth_btn">Anmelden</button>
+    </div>
+  </div>
+  <div class="card" id="auth-open" style="display:none;font-size:12px;border-color:var(--orange);color:var(--orange)"></div>
+  <div id="auth-out" style="display:none;text-align:right;margin-top:6px">
+    <button type="button" class="btn" style="font-size:11px;padding:3px 10px" onclick="authLogout()" data-i18n="cfg.auth_logout">Abmelden</button>
+  </div>
+
   <!-- Sprache -->
   <div class="section-title" data-i18n="cfg.lang_title">Sprache / Language</div>
   <div class="card">
@@ -461,7 +474,9 @@ async function livePair(){
   var box=document.getElementById('live-pair-code'), left=document.getElementById('live_pin_left');
   clearInterval(livePairTimer);
   try{
-    var d=await(await fetch('/live-pair',{method:'POST'})).json();
+    var lr=await fetch('/live-pair',{method:'POST'});
+    if(lr.status===401){ toast(t('cfg.auth_needed'),false); return; }
+    var d=await lr.json();
     if(!d.ok){ box.style.display='none'; toast(t('cfg.live_pair_off'),false); return; }
     document.getElementById('live_pin').textContent=d.code;
     box.style.display='';
@@ -475,9 +490,38 @@ async function livePair(){
   }catch(e){ toast(t('cfg.conn_err'),false); }
 }
 
+// 1.7.8: Anmeldung. Ohne Anmeldung liefert /api/config keine Geheimnisse
+// ("locked"), Speichern und Koppeln antworten 401.
+function authShow(d){
+  var locked=d.locked===true;
+  document.getElementById('auth-card').style.display=locked?'':'none';
+  document.getElementById('auth-out').style.display=(d.auth&&!locked&&!d.unlock_s)?'':'none';
+  var op=document.getElementById('auth-open');
+  if(d.unlock_s){op.style.display='';op.textContent=t('cfg.auth_unlocked',[Math.ceil(d.unlock_s/60)]);}
+  else op.style.display='none';
+  document.getElementById('btn-save').disabled=locked;
+}
+async function authLogin(){
+  var pw=document.getElementById('auth-pw').value;
+  try{
+    var r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:pw})});
+    if(r.ok){document.getElementById('auth-pw').value='';toast(t('cfg.auth_ok'));loadConfig();}
+    else toast(t('cfg.auth_bad'),false);
+  }catch(e){toast(t('cfg.conn_err'),false);}
+}
+async function authLogout(){
+  try{await fetch('/api/logout',{method:'POST'});}catch(e){}
+  loadConfig();
+}
+document.addEventListener('DOMContentLoaded',function(){
+  var f=document.getElementById('auth-pw');
+  if(f)f.addEventListener('keydown',function(e){if(e.key==='Enter')authLogin();});
+});
+
 async function loadConfig(){
   try{
     var d=await(await fetch('/api/config')).json();
+    authShow(d);
     document.getElementById('ap_ssid').value   = d.ap_ssid  || '';
     document.getElementById('ap_pass').value   = d.ap_pass  || '';
     document.getElementById('sim_pin').value   = d.sim_pin  || '';
@@ -559,6 +603,7 @@ async function saveConfig(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(payload)
     });
+    if(r.status===401){ toast(t('cfg.auth_needed'),false); loadConfig(); btn.disabled=false; return; }
     var d=await r.json();
     if(d.ok){
       toast(t('cfg.saved'));

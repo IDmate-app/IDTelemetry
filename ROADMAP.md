@@ -1,6 +1,6 @@
 # Roadmap Stick
 
-Stand: 2026-11-19, Firmware 1.7.7. Die Abschnitte unten sind der Planungsstand
+Stand: 2026-11-19, Firmware 1.7.8. Die Abschnitte unten sind der Planungsstand
 vom 2026-11-06 (Firmware 1.4.0) und bleiben als Begründung stehen. Was daraus
 geworden ist:
 

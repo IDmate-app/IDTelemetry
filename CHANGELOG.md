@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.8] – 2026-11-19
+
+### Added
+
+- **Login for the web UI**: with an AP password set, `/api/config` no longer shows passwords, keys and upload URLs without login, and saving the settings, sending on the CAN bus (`/send`, `/scan`, `/monitor`, `/restart-can`, `/api/canpid`) and opening the pairing window answer 401. Log in on the Config page with the AP password (`/api/login`, session cookie, 30 min sliding). Wrong passwords are slowed down and logged. Without AP password everything stays open as before.
+- **Way back in**: holding the boot button for 5 s while the stick runs opens the web UI without password for 3 minutes (syslog `WEB`), e.g. to set a new AP password.
+
 ## [1.7.7] – 2026-11-19
 
 ### Fixed

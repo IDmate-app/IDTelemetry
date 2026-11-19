@@ -20,6 +20,7 @@
 #include <Update.h>
 #include <esp_ota_ops.h>
 #include "mod_ota.h"
+#include "mod_auth.h"
 
 // ── Eingebettete Web-Assets ─────────────────────────────────
 // Linker-Symbole von board_build.embed_txtfiles in platformio.ini.
@@ -139,6 +140,7 @@ void web_init() {
     server.on("/send", HTTP_POST, [](AsyncWebServerRequest* r) {},
         nullptr,
         [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            if (!auth_ok(r)) { auth_deny(r); return; }   // 1.7.8: nur angemeldet
             JsonDocument doc;
             deserializeJson(doc, data, len);
             String id_s  = doc["id"]       | "7DF";
@@ -165,6 +167,7 @@ void web_init() {
     server.on("/scan", HTTP_POST, [](AsyncWebServerRequest* r) {},
         nullptr,
         [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            if (!auth_ok(r)) { auth_deny(r); return; }   // 1.7.8: nur angemeldet
             if (scan_running) { r->send(200, "application/json", "{\"err\":\"laeuft\"}"); return; }
             JsonDocument doc; deserializeJson(doc, data, len);
             int      mode    = doc["mode"]   | 1;
@@ -184,6 +187,7 @@ void web_init() {
     server.on("/monitor", HTTP_POST, [](AsyncWebServerRequest* r) {},
         nullptr,
         [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            if (!auth_ok(r)) { auth_deny(r); return; }   // 1.7.8: nur angemeldet
             JsonDocument doc; deserializeJson(doc, data, len);
             monitor_mode = doc["enable"] | false;
             r->send(200, "application/json", "{\"ok\":true}");
@@ -193,6 +197,7 @@ void web_init() {
     server.on("/restart-can", HTTP_POST, [](AsyncWebServerRequest* r) {},
         nullptr,
         [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            if (!auth_ok(r)) { auth_deny(r); return; }   // 1.7.8: nur angemeldet
             JsonDocument doc; deserializeJson(doc, data, len);
             uint32_t br = doc["bitrate"] | CAN_SPEED_KBPS;
             can_stop();
@@ -211,6 +216,7 @@ void web_init() {
     // mod_live: Kopplungsfenster oeffnen. Der Code steht nur in dieser Antwort,
     // gilt LIVE_PAIR_WINDOW_S Sekunden und fuer einen Versuch.
     server.on("/live-pair", HTTP_POST, [](AsyncWebServerRequest* r) {
+        if (!auth_ok(r)) { auth_deny(r); return; }
         uint32_t code = live_pair_open();
         char b[64];
         if (code) snprintf(b, sizeof(b), "{\"ok\":true,\"code\":\"%06lu\",\"seconds\":%d}", (unsigned long)code, LIVE_PAIR_WINDOW_S);
@@ -516,6 +522,7 @@ void ble_web_routes_init() {
     server.on("/api/canpid", HTTP_POST, [](AsyncWebServerRequest* r) {},
         nullptr,
         [](AsyncWebServerRequest* r, uint8_t* body, size_t len, size_t, size_t) {
+            if (!auth_ok(r)) { auth_deny(r); return; }   // 1.7.8: nur angemeldet
             JsonDocument doc;
             if (deserializeJson(doc, body, len)) {
                 r->send(400, "application/json", "{\"ok\":false}"); return;
@@ -718,8 +725,10 @@ void ble_web_routes_init() {
     });
 
     // ── Laufzeit-Config (NVS) ──────────────────────────────────
+    // 1.7.8 (L-028): ohne Anmeldung ohne Geheimnisse, dafuer "locked":true
     server.on("/api/config", HTTP_GET, [](AsyncWebServerRequest* r) {
-        auto* resp = r->beginResponse(200, "application/json", cfg_to_json());
+        auto* resp = r->beginResponse(200, "application/json",
+                                      cfg_to_json(auth_ok(r), auth_required(), auth_unlock_left_s()));
         headers_apply(resp);
         r->send(resp);
     });
@@ -727,10 +736,34 @@ void ble_web_routes_init() {
     server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest* r) {},
         nullptr,
         [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            if (!auth_ok(r)) { auth_deny(r); return; }   // 1.7.8: nur angemeldet
             bool ok = cfg_save_json(data, len);
             r->send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
         }
     );
+
+    // ── Anmeldung (1.7.8, mod_auth) ────────────────────────────
+    server.on("/api/login", HTTP_POST, [](AsyncWebServerRequest* r) {},
+        nullptr,
+        [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            deserializeJson(doc, data, len);
+            const char* pw = doc["pw"] | "";
+            char tok[40];
+            if (!auth_login(pw, tok, sizeof(tok))) { auth_deny(r); return; }
+            auto* resp = r->beginResponse(200, "application/json", "{\"ok\":true}");
+            char c[96];
+            snprintf(c, sizeof(c), "idt_s=%s; Path=/; HttpOnly; SameSite=Strict", tok);
+            resp->addHeader("Set-Cookie", c);
+            r->send(resp);
+        }
+    );
+    server.on("/api/logout", HTTP_POST, [](AsyncWebServerRequest* r) {
+        auth_logout(r);
+        auto* resp = r->beginResponse(200, "application/json", "{\"ok\":true}");
+        resp->addHeader("Set-Cookie", "idt_s=; Path=/; Max-Age=0; SameSite=Strict");
+        r->send(resp);
+    });
 
     // ── WiFi-Upload Test ───────────────────────────────────────
     // POST {"slot":0|1} → kicks off a connect+dummy-publish test for the

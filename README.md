@@ -114,6 +114,8 @@ Three pages:
 
 The Config page is the single source of runtime configuration — everything that used to live in `secrets.h` can be edited here and is persisted in NVS.
 
+**Login (since 1.7.8):** with an AP password set, the Config page asks for it before it shows passwords and keys or saves anything; the login lasts 30 minutes from the last use. Sending on the CAN bus from the Debug tools and opening the Bluetooth pairing window need the login too. **Forgot the password?** Hold the boot button for 5 seconds while the stick is running: the web UI is then open without password for 3 minutes, enough to set a new one. Do not hold it while powering on – that starts the ESP32 in flashing mode.
+
 > ⚠️ **WiFi Upload slots: use `http://` or `mqtt://` only.** `https://` endpoints are **not verified to work** — the upload path calls `HTTPClient::begin(url)` without a `WiFiClientSecure`/CA, so depending on the Arduino core `begin()` may silently fail and rows would never upload (the breakage only shows up at drain time). Until a `https://` slot has been verified on a test ESP against a real endpoint, configure upload URLs as plain `http://` or `mqtt://`.
 
 ## Installation Guide

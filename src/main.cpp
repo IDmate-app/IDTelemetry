@@ -33,6 +33,7 @@
 #include "mod_can.h"
 #include "mod_logs.h"
 #include "mod_web.h"
+#include "mod_auth.h"
 #include "mod_elm327.h"
 #include "mod_live.h"
 #include "mod_ble_scan.h"
@@ -208,6 +209,7 @@ void setup() {
     rcfg_init();     // 1.6.8: von IDmate gelernte Korrekturen fuer ABRP
 
     // 1. WiFi + Web
+    auth_init();
     web_init();
     logs_init();
     ota_boot_log();
@@ -432,6 +434,7 @@ void loop() {
 
     ws.cleanupClients(1);  // max 1 WS-Client: alte Verbindung beim Seitenwechsel sofort schließen
     web_ap_update();       // AP-Timeout (2 min ohne Client) + VBUS-Restart
+    auth_tick();           // 1.7.8: Boot-Taste 5 s = 3 min ohne Passwort
     sleep_update();        // Inaktivität → Deep Sleep
 
     // Minütlicher Status-Log

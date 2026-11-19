@@ -91,4 +91,6 @@ bool        cfg_log_wifi();   // WiFi Scan-Log (Legacy)
 bool        cfg_save_json(const uint8_t* body, size_t len);
 
 // Web-API: aktuellen Stand als JSON-String (statischer Puffer)
-const char* cfg_to_json();
+// 1.7.8: secrets=false laesst Passwoerter, Schluessel und Upload-URLs leer und
+// setzt "locked":true (Weboberflaeche ohne Anmeldung, mod_auth).
+const char* cfg_to_json(bool secrets = true, bool auth_required = false, uint32_t unlock_s = 0);

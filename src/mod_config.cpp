@@ -323,7 +323,7 @@ bool cfg_save_json(const uint8_t* body, size_t len) {
     return true;
 }
 
-const char* cfg_to_json() {
+const char* cfg_to_json(bool secrets, bool auth_required, uint32_t unlock_s) {
     // FIXES B.15: war 1200 — Summe der Feld-Maxima (ix_token, aes_key,
     // upload_url ×2, …) + Keys/Quotes > 1200 → bei Vollkonfig schnitt
     // serializeJson() das JSON still ab → /api/config kaputt, i18n.js failt
@@ -368,6 +368,15 @@ const char* cfg_to_json() {
     doc["log_ble"]      = s_log_ble;
     doc["log_wifi"]     = s_log_wifi;
     doc["lang"]         = s_lang;
+    if (!secrets) {
+        static const char* const SECRET_KEYS[] = {
+            "ap_pass", "sim_pin", "apn_pass", "ix_token", "mq_pass", "aes_key",
+            "sta_pass", "sta_pass_2", "upload_url", "upload_url_2" };
+        for (auto k : SECRET_KEYS) doc[k] = "";
+        doc["locked"] = true;
+    }
+    doc["auth"]     = auth_required;
+    if (unlock_s) doc["unlock_s"] = unlock_s;
     serializeJson(doc, buf, sizeof(buf));
     return buf;
 }
