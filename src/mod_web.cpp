@@ -694,6 +694,12 @@ void ble_web_routes_init() {
     server.on("/sys-log-tail", HTTP_GET, [tail_send](AsyncWebServerRequest* r) { tail_send(r, "/sys.log"); });
     server.on("/elm-log-tail", HTTP_GET, [tail_send](AsyncWebServerRequest* r) { tail_send(r, "/elm.log"); });
 
+    server.on("/download-did-runs", HTTP_GET, [stream_log](AsyncWebServerRequest* r) {
+        stream_log(r, DID_RUNS_FILE, "did_runs.jsonl");
+    });
+    server.on("/download-did-known", HTTP_GET, [stream_log](AsyncWebServerRequest* r) {
+        stream_log(r, DID_KNOWN_FILE, "did_known.txt");
+    });
     server.on("/download-sys-log", HTTP_GET, [stream_log](AsyncWebServerRequest* r) {
         stream_log(r, "/sys.log", "sys.log");
     });
@@ -765,6 +771,30 @@ void ble_web_routes_init() {
             r->send(200, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false,\"err\":\"busy_or_range\"}");
         }
     );
+    // 1.7.10: Sammeln, Messen, Weck-Test, Messlaeufe herunterladen/loeschen
+    server.on("/api/did-collect", HTTP_POST, [](AsyncWebServerRequest* r) {
+        if (!auth_ok(r)) { auth_deny(r); return; }
+        r->send(200, "application/json", didsearch_collect() ? "{\"ok\":true}" : "{\"ok\":false}");
+    });
+    server.on("/api/did-measure", HTTP_POST, [](AsyncWebServerRequest* r) {},
+        nullptr,
+        [](AsyncWebServerRequest* r, uint8_t* data, size_t len, size_t, size_t) {
+            if (!auth_ok(r)) { auth_deny(r); return; }
+            JsonDocument doc; deserializeJson(doc, data, len);
+            int km = doc["km"] | -1;
+            r->send(200, "application/json", didsearch_measure(km) ? "{\"ok\":true}" : "{\"ok\":false}");
+        }
+    );
+    server.on("/api/wake-test", HTTP_POST, [](AsyncWebServerRequest* r) {
+        if (!auth_ok(r)) { auth_deny(r); return; }
+        r->send(200, "application/json", didsearch_wake_test() ? "{\"ok\":true}" : "{\"ok\":false}");
+    });
+    server.on("/api/did-runs/clear", HTTP_POST, [](AsyncWebServerRequest* r) {
+        if (!auth_ok(r)) { auth_deny(r); return; }
+        didsearch_clear_runs();
+        r->send(200, "application/json", "{\"ok\":true}");
+    });
+
     server.on("/api/did-search/abort", HTTP_POST, [](AsyncWebServerRequest* r) {
         didsearch_abort();
         r->send(200, "application/json", "{\"ok\":true}");

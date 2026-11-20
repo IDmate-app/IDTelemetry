@@ -1,6 +1,6 @@
 # Roadmap Stick
 
-Stand: 2026-11-19, Firmware 1.7.9. Die Abschnitte unten sind der Planungsstand
+Stand: 2026-11-20, Firmware 1.7.10. Die Abschnitte unten sind der Planungsstand
 vom 2026-11-06 (Firmware 1.4.0) und bleiben als Begründung stehen. Was daraus
 geworden ist:
 
@@ -211,6 +211,10 @@ Stand 19.11.2026: In IDmate kam nie ein Wert an; ABRP fragt `0x0295` nicht
 ab, die Kennung ist unbestätigt. Seit 1.7.9 meldet das Syslog je Kennung, was
 das Auto antwortet, und die Debug-Seite hat eine DID-Suche mit Abgleich gegen
 die angezeigte Reichweite.
+
+Seit 1.7.10: Messreihe auf der Debug-Seite (Kennungen sammeln, bei
+verschiedenen Reichweiten messen, `did_runs.jsonl` herunterladen) und
+`tools/did_fit.py` zur Auswertung.
 
 ---
 

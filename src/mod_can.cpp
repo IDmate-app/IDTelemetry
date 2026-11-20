@@ -52,6 +52,35 @@ static bool can_tx_allowed() {
 
 bool can_tx_ok() { return can_running && can_tx_allowed(); }
 
+static bool can_reinstall(twai_mode_t mode, uint32_t kbps);
+static int isotp_query_inner(uint32_t tx_id, uint32_t rx_id, const uint8_t* req, uint8_t req_len,
+                             uint8_t* resp, uint16_t max_resp, uint32_t timeout_ms);
+
+int can_wake_query(uint32_t tx_id, uint32_t rx_id, uint16_t did, uint8_t* resp, uint16_t max_resp) {
+    if (!can_running || !can_lock(3000)) return -1;
+    bool was_listen = s_listen_only;
+    if (was_listen) {
+        twai_stop(); twai_driver_uninstall();
+        if (!can_reinstall(TWAI_MODE_NORMAL, CAN_SPEED_KBPS)) {
+            can_running = can_reinstall(TWAI_MODE_LISTEN_ONLY, CAN_SPEED_KBPS);
+            can_unlock();
+            return -1;
+        }
+        s_listen_only = false;
+    }
+    uint8_t req[3] = { 0x22, (uint8_t)(did >> 8), (uint8_t)(did & 0xFF) };
+    int n = isotp_query_inner(tx_id, rx_id, req, 3, resp, max_resp, 800);
+    if (was_listen) {
+        twai_stop(); twai_driver_uninstall();
+        bool ok = can_reinstall(TWAI_MODE_LISTEN_ONLY, CAN_SPEED_KBPS);
+        if (!ok) ok = can_reinstall(TWAI_MODE_NORMAL, CAN_SPEED_KBPS);
+        else s_listen_only = true;
+        can_running = ok;
+    }
+    can_unlock();
+    return n;
+}
+
 // ============================================================
 //  mod_can - CAN Bus, UDS, OBD2, Scanner
 // ============================================================

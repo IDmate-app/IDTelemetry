@@ -253,6 +253,26 @@
       <button class="btn accent" style="font-size:11px;padding:3px 10px" onclick="dsStart()" data-i18n="dbg.ds_start">Suchen</button>
       <button class="btn danger" style="font-size:11px;padding:3px 10px" onclick="dsAbort()" data-i18n="dbg.ds_abort">Stopp</button>
     </div>
+    <div style="border-top:1px solid #333;margin-top:10px;padding-top:8px">
+      <div style="font-weight:600;margin-bottom:4px" data-i18n="dbg.dm_title">Messreihe Reichweite</div>
+      <div style="color:var(--muted);margin-bottom:6px;line-height:1.5" data-i18n="dbg.dm_desc">1. Einmal Kennungen sammeln (Auto wach, im Stand, dauert einige Minuten). 2. Bei jeder Gelegenheit die angezeigte Reichweite eintragen und messen &#8211; m&#246;glichst bei verschiedenen Reichweiten und Temperaturen. Die Datei der Messl&#228;ufe zur Auswertung herunterladen.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <button class="btn" style="font-size:11px;padding:3px 10px" onclick="dmCollect()" data-i18n="dbg.dm_collect">1. Kennungen sammeln</button>
+        <input id="dm-km" type="number" min="0" max="2000" style="width:80px" data-i18n-ph="dbg.ds_target" placeholder="km Anzeige">
+        <button class="btn accent" style="font-size:11px;padding:3px 10px" onclick="dmMeasure()" data-i18n="dbg.dm_measure">2. Messen</button>
+      </div>
+      <div id="dm-info" style="margin-top:6px;color:var(--muted)"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+        <a href="/download-did-runs" class="btn" style="font-size:10px;padding:2px 10px;text-decoration:none" download>&#x2193; did_runs.jsonl</a>
+        <a href="/download-did-known" class="btn" style="font-size:10px;padding:2px 10px;text-decoration:none" download>&#x2193; did_known.txt</a>
+        <button class="btn danger" style="font-size:10px;padding:2px 10px" onclick="dmClear()" data-i18n="dbg.dm_clear">Messl&#228;ufe l&#246;schen</button>
+      </div>
+    </div>
+    <div style="border-top:1px solid #333;margin-top:10px;padding-top:8px">
+      <div style="font-weight:600;margin-bottom:4px" data-i18n="dbg.wt_title">Weck-Test</div>
+      <div style="color:var(--muted);margin-bottom:6px;line-height:1.5" data-i18n="dbg.wt_desc">Nur im offenen Auto sitzend dr&#252;cken (Z&#252;ndung aus). Der Stick schickt eine Lese-Anfrage auch ohne Spannung am Port; das Ergebnis steht im System Log.</div>
+      <button class="btn" style="font-size:11px;padding:3px 10px" onclick="wakeTest()" data-i18n="dbg.wt_btn">Weck-Test</button>
+    </div>
     <div id="ds-status" style="margin-top:6px;color:var(--muted)"></div>
     <div class="log-box" id="ds-hits" style="max-height:200px;white-space:pre;margin-top:6px;display:none"></div>
   </div>
@@ -777,13 +797,30 @@ async function dsStart(){
     dsPoll();
   }catch(_){toast(t('dbg.ds_busy'),false);}
 }
+async function dsPost(url,body){
+  try{
+    var r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+    if(r.status===401){toast(t('dbg.ds_auth'),false);return false;}
+    var d=await r.json(); if(!d.ok){toast(t('dbg.ds_busy'),false);return false;}
+    dsPoll(); return true;
+  }catch(_){toast(t('dbg.ds_busy'),false);return false;}
+}
+function dmCollect(){dsPost('/api/did-collect');}
+function dmMeasure(){var v=document.getElementById('dm-km').value;if(v===''){toast(t('dbg.dm_need_km'),false);return;}dsPost('/api/did-measure',{km:parseInt(v)});}
+function dmClear(){if(confirm(t('dbg.dm_clear')+'?'))dsPost('/api/did-runs/clear');}
+async function wakeTest(){if(await dsPost('/api/wake-test'))toast(t('dbg.wt_started'));}
 async function dsAbort(){try{await fetch('/api/did-search/abort',{method:'POST'});}catch(_){}}
 async function dsPoll(){
   clearTimeout(_dsTimer);
   try{
     var d=await(await fetch('/api/did-search')).json();
     var st=document.getElementById('ds-status');
-    if(d.running||d.answers||d.nrc||d.silent){
+    document.getElementById('dm-info').textContent=t('dbg.dm_info',[d.known||0,d.runs||0]);
+    if(d.mode===2||d.mode===3){
+      st.textContent=(d.mode===2?t('dbg.dm_collect'):t('dbg.dm_measure'))+': '+(d.running?(d.paused?t('dbg.ds_paused'):t('dbg.ds_running')):t('dbg.ds_done'))+' · '+d.done+'/'+d.total+' · '+t('dbg.ds_counts',[d.answers,d.nrc,d.silent]);
+    }else if(d.mode===4){
+      st.textContent=t('dbg.wt_title')+': '+(d.running?t('dbg.ds_running'):t('dbg.wt_done'));
+    }else if(d.running||d.answers||d.nrc||d.silent){
       var tot=d.to-d.from+1, done=d.pos-d.from+(d.running?0:1);
       st.textContent=(d.running?(d.paused?t('dbg.ds_paused'):t('dbg.ds_running')):t('dbg.ds_done'))+' · 0x'+d.pos.toString(16).toUpperCase()+' · '+done+'/'+tot+' · '+t('dbg.ds_counts',[d.answers,d.nrc,d.silent]);
     }

@@ -28,6 +28,11 @@ int can_isotp_query(uint32_t tx_id, uint32_t rx_id,
                     uint8_t* resp, uint16_t max_resp,
                     uint32_t timeout_ms);
 
+// 1.7.10: Weck-Test. Eine UDS-Leseanfrage (0x22 did) OHNE die Sende-Sperre:
+// auch ohne Spannung am Port, Hoermodus wird dafuer kurz verlassen. Nur fuer den
+// Test-Knopf (angemeldet, Nutzer sitzt im Auto). Rueckgabe wie can_isotp_query.
+int can_wake_query(uint32_t tx_id, uint32_t rx_id, uint16_t did, uint8_t* resp, uint16_t max_resp);
+
 // 1.7.9: darf der Stick gerade senden (Spannung, Bewegung/Laden, kein Hoermodus)?
 bool can_tx_ok();
 

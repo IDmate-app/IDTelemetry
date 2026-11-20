@@ -3,6 +3,13 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.10] – 2026-11-20
+
+### Added
+
+- **Range measurement series** (Debug page): "Collect identifiers" reads a fixed list of control units and ranges once and remembers every identifier that answers (`did_known.txt`; a range silent 32 times in a row is skipped). "Measure" with the range shown in the car reads all of them and appends one line with time, shown km, SoC, odometer, temperatures and all raw answers to `did_runs.jsonl` (download on the Debug page). `tools/did_fit.py` fits the shown range against every byte reading of every identifier over all runs and ranks the candidates; it also marks those that only follow the SoC. Read only, only while the car is awake, needs the login.
+- **Wake test** (Debug page): sends one read request even without voltage at the port (listen-only mode is left for it) and writes to the syslog whether the car answers. For sitting in the unlocked car with ignition off: shows whether the stick could read while charging without ignition. Needs the login.
+
 ## [1.7.9] – 2026-11-19
 
 ### Added
