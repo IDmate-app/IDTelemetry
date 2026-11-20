@@ -5,6 +5,11 @@ versioning per [SemVer](https://semver.org/).
 
 ## [1.7.10] – 2026-11-20
 
+**Deutsch, kurz:**
+- Debug-Seite: Messreihe Reichweite – Kennungen sammeln, mit der angezeigten Reichweite messen, Messläufe als Datei herunterladen.
+- Debug-Seite: Weck-Test – prüft, ob das Auto bei ausgeschalteter Zündung auf eine Lese-Anfrage antwortet.
+- Werkzeug: Auswerte-Programm (`tools/did_fit.py`), das in den Messläufen die Kennung für die Reichweite sucht.
+
 ### Added
 
 - **Range measurement series** (Debug page): "Collect identifiers" reads a fixed list of control units and ranges once and remembers every identifier that answers (`did_known.txt`; a range silent 32 times in a row is skipped). "Measure" with the range shown in the car reads all of them and appends one line with time, shown km, SoC, odometer, temperatures and all raw answers to `did_runs.jsonl` (download on the Debug page). `tools/did_fit.py` fits the shown range against every byte reading of every identifier over all runs and ranks the candidates; it also marks those that only follow the SoC. Read only, only while the car is awake, needs the login.
