@@ -271,7 +271,7 @@ static void measure_task(void*) {
         if (!wait_awake()) break;
         uint8_t req[3] = { 0x22, (uint8_t)(list[i].did >> 8), (uint8_t)(list[i].did & 0xFF) };
         uint8_t resp[64] = {};
-        int n = can_isotp_query(list[i].req, list[i].resp, req, 3, resp, sizeof(resp), 300);
+        int n = can_isotp_query(list[i].req, list[i].resp, req, 3, resp, sizeof(resp), 200);
         if (n >= 4 && resp[0] == 0x62) {
             s_answers++;
             char kv[48]; snprintf(kv, sizeof(kv), "%s\"%lX:%04X\":\"", first ? "" : ",", (unsigned long)list[i].req, list[i].did);
@@ -286,9 +286,11 @@ static void measure_task(void*) {
         } else if (n >= 3 && resp[0] == 0x7F) s_nrc++;
         else s_silent++;
         if (part.length() > 1200) { ok = tmp_write(part); part = ""; }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
-    part += "}}\n";
+    // Ende des Laufs: die Reichweite kann sich waehrend der Fahrt um 1-2 km aendern
+    char tail[48]; snprintf(tail, sizeof(tail), "},\"t_end\":%lu}\n", (unsigned long)(rtc_unix_ms() / 1000ULL));
+    part += tail;
     bool saved = false;
     if (ok && !s_abort && !g_shutdown) saved = tmp_write(part) && tmp_commit();
     else if (spiffs_lock(1000)) { SPIFFS.remove(DID_RUN_TMP); spiffs_unlock(); }

@@ -6,7 +6,7 @@ Each line is one run: the range shown in the car ("km"), SoC, odometer,
 temperatures and the raw answer of every identifier ("r": {"ECU:DID": "hex"}).
 
 For every identifier and every way to read a number from its bytes (one byte,
-two bytes big/little endian, signed or not, at each position) the script fits
+two, three or four bytes big/little endian, signed or not, 12-bit across a byte, at each position) the script fits
 km = a * value + b over all runs (least squares) and ranks the candidates by
 the largest error. A value that only follows the SoC fits well, too; so the
 script also fits the SoC alone and marks candidates that do not beat it.
@@ -53,6 +53,16 @@ def readings(hexstr):
             out.append((f"u16be[{i}]", be))
             out.append((f"u16le[{i}]", le))
             out.append((f"s16be[{i}]", be - 65536 if be >= 32768 else be))
+        if i + 2 < len(b):
+            out.append((f"u24be[{i}]", int.from_bytes(b[i:i + 3], "big")))
+            out.append((f"u24le[{i}]", int.from_bytes(b[i:i + 3], "little")))
+        if i + 3 < len(b):
+            out.append((f"u32be[{i}]", int.from_bytes(b[i:i + 4], "big")))
+            out.append((f"u32le[{i}]", int.from_bytes(b[i:i + 4], "little")))
+        # 12-bit-Werte ueber eine Byte-Grenze (VW packt so manches)
+        if i + 1 < len(b):
+            out.append((f"u12hi[{i}]", (b[i] << 4) | (b[i + 1] >> 4)))
+            out.append((f"u12lo[{i}]", ((b[i] & 0x0F) << 8) | b[i + 1]))
     return out
 
 

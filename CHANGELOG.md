@@ -7,7 +7,8 @@ versioning per [SemVer](https://semver.org/).
 
 **Deutsch, kurz:**
 - Debug-Seite: „Reichweite finden“ ist jetzt ein einziger Ablauf – Reichweite eintragen, „Messen“ drücken. Beim ersten Mal sucht der Stick die Kennungen selbst vorher. Ein Download „Messdaten herunterladen“ statt drei Bereichen und zwei Dateien.
-- Messen zeigt gleich die Antworten, in denen die eingetragene Reichweite vorkommt.
+- Messen zeigt gleich die Antworten, in denen die eingetragene Reichweite vorkommt. Ein Lauf ist schneller und merkt sich Anfang und Ende (die Reichweite ändert sich beim Fahren).
+- Auswertung (`tools/did_fit.py`): liest auch drei und vier Byte lange Werte und 12-Bit-Werte über eine Byte-Grenze.
 - Behoben: Ein Messlauf konnte verloren gehen, weil alle Antworten zuerst im Speicher gesammelt wurden; jetzt werden sie Stück für Stück gespeichert. Das Syslog sagt, ob der Lauf gespeichert wurde.
 
 ### Changed
