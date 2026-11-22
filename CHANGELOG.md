@@ -16,7 +16,7 @@ versioning per [SemVer](https://semver.org/).
 
 ### Fixed
 
-- **Measurement runs were never stored**: the whole run was built as one string of up to ~30 KB in RAM before writing. It is now written in pieces to `/did_run.tmp` and appended to `did_runs.jsonl` at the end; the syslog says "Lauf … gespeichert" or "NICHT gespeichert". The identifier list holds up to 640 entries (was 400; the car answered 406).
+- **A measurement run could be lost** (none arrived so far): the whole run was built as one string of up to ~30 KB in RAM before writing. It is now written in pieces to `/did_run.tmp` and appended to `did_runs.jsonl` at the end; the syslog says "Lauf … gespeichert" or "NICHT gespeichert". The identifier list holds up to 640 entries (was 400; the car answered 406).
 
 ## [1.7.10] – 2026-11-20
 
