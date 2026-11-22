@@ -682,7 +682,7 @@ static void decode_did_response(uint16_t did, const uint8_t* d, int n) {
                 telem_update(TELEM_EXT_TEMP, v, plausible(v, -40.f, 80.f));
             }
             break;
-        case 0x0295:  // Reichweite: A:B
+        case 0x2AB6:  // Reichweite (Gateway 710, 1.7.11 per Messreihe gefunden): A:B = km wie im Kombi
             if (n >= 2) {
                 float v = (float)((d[0] << 8) | d[1]);
                 telem_update(TELEM_RANGE, v, plausible(v, 0.f, 600.f));
@@ -752,7 +752,7 @@ static CanQuerySlot s_can_schedule[] = {
     // ── Mittel (15s): Batt-Temp, Außen-Temp, Reichweite ──
     { ECU_FC007B_REQ, ECU_FC007B_RESP, 0x2A0B, 15000, 0 },  // [3] Batt-Temp
     { ECU_746_REQ,    ECU_746_RESP,    0x2609, 15000, 0 },   // [4] Außen-Temp
-    { ECU_FC007B_REQ, ECU_FC007B_RESP, 0x0295, 15000, 0 },   // [5] Reichweite
+    { ECU_710_REQ,    ECU_710_RESP,    0x2AB6, 15000, 0 },   // [5] Reichweite (bis 1.7.10 0x0295 auf FC007B: antwortet nie)
     // ── Langsam (30s): SoC, Geparkt ──
     { ECU_FC007B_REQ, ECU_FC007B_RESP, 0x028C, 30000, 0 },   // [6] SoC
     { ECU_FC0076_REQ, ECU_FC0076_RESP, 0x210E, 30000, 0 },   // [7] Geparkt
@@ -1394,8 +1394,8 @@ void telem_feed_did(uint16_t did, const uint8_t* data, int data_len, uint32_t re
                 telem_update(TELEM_ODOMETER, v, plausible(v, 0.f, 999999.f));
             }
             break;
-        case 0x0295:  // Reichweite
-            if (data_len >= 2) {
+        case 0x2AB6:  // Reichweite (Gateway 710): A:B = km
+            if (data_len >= 2 && req_id == ECU_710_REQ) {
                 float v = (float)((data[0] << 8) | data[1]);
                 telem_update(TELEM_RANGE, v, plausible(v, 0.f, 600.f));
             }

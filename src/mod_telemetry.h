@@ -30,7 +30,7 @@ enum TelemField {
     // Mittel (GPS/Gyro/LTE 10 s, CAN Phase 2)
     TELEM_BATT_TEMP,
     TELEM_EXT_TEMP,
-    TELEM_RANGE,           // DID 0x0295, ECU FC007B (km)
+    TELEM_RANGE,           // DID 0x2AB6, ECU 710 Gateway (km, seit 1.7.11)
     TELEM_GPS_LAT,
     TELEM_GPS_LON,
     TELEM_GPS_HEADING,    // berechnet aus zwei aufeinanderfolgenden GPS-Punkten (°)

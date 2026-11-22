@@ -158,7 +158,7 @@ const KnownDID VW_MEB_DIDS[] = {
     { 0x0101, "E-Motor RPM",      "rpm" },
     { 0x0102, "Drehmoment",       "Nm" },
     { 0x0168, "Kühlmittel",       "°C" },
-    { 0x0295, "Reichweite",       "km" },
+    { 0x2AB6, "Reichweite",       "km" },
     { 0x1000, "Odometer",         "km" },
 };
 const int VW_MEB_DID_COUNT = sizeof(VW_MEB_DIDS) / sizeof(VW_MEB_DIDS[0]);

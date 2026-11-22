@@ -3,6 +3,15 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.12] – 2026-11-22
+
+**Deutsch, kurz:**
+- Reichweite: Der Stick liest jetzt die Reichweite, die das Auto im Kombiinstrument zeigt, und schickt sie an IDmate und an die Live-Anzeige. Gefunden mit der Messreihe aus 1.7.11.
+
+### Fixed
+
+- **Range** now arrives: the car's displayed range is DID `0x2AB6` on the gateway (`710`/`77A`), bytes 0–1 big endian = km, no scaling (found with six measurement runs at 202…195 km, exact in every run). The old `0x0295` on `17FC007B` never answered and is no longer polled.
+
 ## [1.7.11] – 2026-11-22
 
 **Deutsch, kurz:**
