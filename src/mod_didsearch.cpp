@@ -124,7 +124,15 @@ static void search_task(void*) {
 }
 
 // ── Sammeln ──────────────────────────────────────────────────
-static void collect_task(void*) {
+static uint8_t s_phase = 0;              // Messen: 1 sammelt erst, 2 liest
+
+static void collect_total() {
+    s_total = 0; s_done = 0;
+    for (int k = 0; k < COLLECT_N; k++) s_total += COLLECT[k].to - COLLECT[k].from + 1;
+}
+
+// Liste neu aufbauen: jede Kennung, die antwortet, nach DID_KNOWN_FILE.
+static void do_collect() {
     char m[96];
     syslog("CAN", "DID sammeln: Start");
     if (spiffs_lock(1000)) { SPIFFS.remove(DID_KNOWN_FILE); spiffs_unlock(); }
@@ -163,15 +171,18 @@ static void collect_task(void*) {
     }
     snprintf(m, sizeof(m), "DID sammeln fertig: %u Kennungen antworten", s_known);
     syslog("CAN", m);
+}
+
+static void collect_task(void*) {
+    do_collect();
     s_running = false;
     vTaskDelete(NULL);
 }
 
 bool didsearch_collect() {
     if (s_running) return false;
-    s_mode = 2; s_answers = s_nrc = s_silent = 0; s_nhits = 0; s_abort = false; s_paused = false;
-    s_total = 0; s_done = 0;
-    for (int k = 0; k < COLLECT_N; k++) s_total += COLLECT[k].to - COLLECT[k].from + 1;
+    s_mode = 2; s_phase = 0; s_answers = s_nrc = s_silent = 0; s_nhits = 0; s_abort = false; s_paused = false;
+    collect_total();
     s_running = true;
     if (xTaskCreatePinnedToCore(collect_task, "DIDCOLL", 4096, nullptr, 1, nullptr, 0) != pdPASS) {
         s_running = false; return false;
@@ -180,14 +191,55 @@ bool didsearch_collect() {
 }
 
 // ── Messen ───────────────────────────────────────────────────
+// 1.7.11: ein Ablauf. Ohne Liste sammelt der Stick zuerst. Die Antworten gehen
+// Stueck fuer Stueck in eine Zwischendatei (vorher eine Zeichenkette von bis zu
+// 30 KB im Speicher, die beim Anhaengen scheitern konnte; ausgewertet wurde nie
+// ein Lauf) und werden erst am Ende an DID_RUNS_FILE gehaengt. Antworten, in
+// denen die angezeigte Reichweite vorkommt, stehen als Treffer in der Anzeige.
+#define DID_RUN_TMP "/did_run.tmp"
+#define DID_LIST_MAX 640
+
+static bool tmp_write(const String& part) {
+    if (!part.length()) return true;
+    if (!spiffs_lock(2000)) return false;
+    File f = SPIFFS.open(DID_RUN_TMP, "a");
+    bool ok = f && f.print(part) == part.length();
+    if (f) f.close();
+    spiffs_unlock();
+    return ok;
+}
+
+// Zwischendatei an die Messlaeufe haengen
+static bool tmp_commit() {
+    if (!spiffs_lock(4000)) return false;
+    File in = SPIFFS.open(DID_RUN_TMP, "r");
+    File out = SPIFFS.open(DID_RUNS_FILE, "a");
+    bool ok = in && out;
+    uint8_t buf[256];
+    while (ok && in.available()) {
+        size_t n = in.read(buf, sizeof(buf));
+        if (out.write(buf, n) != n) ok = false;
+    }
+    if (in) in.close();
+    if (out) out.close();
+    SPIFFS.remove(DID_RUN_TMP);
+    spiffs_unlock();
+    return ok;
+}
+
 static void measure_task(void*) {
-    // Liste laden
     struct K { uint32_t req, resp; uint16_t did; };
-    static K list[400];
+    static K list[DID_LIST_MAX];
+    char m[120];
+    if (count_lines(DID_KNOWN_FILE) == 0) {        // erst die Liste
+        s_phase = 1; collect_total();
+        do_collect();
+    }
+    s_phase = 2;
     int nl = 0;
-    if (spiffs_lock(1000)) {
+    if (!s_abort && spiffs_lock(1000)) {
         File f = SPIFFS.open(DID_KNOWN_FILE, "r");
-        while (f && f.available() && nl < 400) {
+        while (f && f.available() && nl < DID_LIST_MAX) {
             String line = f.readStringUntil('\n');
             unsigned long a, b; unsigned c;
             if (sscanf(line.c_str(), "%lX %lX %X", &a, &b, &c) == 3) list[nl++] = { (uint32_t)a, (uint32_t)b, (uint16_t)c };
@@ -195,22 +247,26 @@ static void measure_task(void*) {
         if (f) f.close();
         spiffs_unlock();
     }
-    s_total = nl; s_done = 0;
-    if (!nl) { syslog("CAN", "DID messen: erst sammeln"); s_running = false; vTaskDelete(NULL); return; }
+    s_total = nl; s_done = 0; s_answers = s_nrc = s_silent = 0; s_nhits = 0;
+    if (!nl) {
+        syslog("CAN", s_abort ? "DID messen: abgebrochen" : "DID messen: keine Kennung antwortet");
+        s_running = false; vTaskDelete(NULL); return;
+    }
+    if (spiffs_lock(1000)) { SPIFFS.remove(DID_RUN_TMP); spiffs_unlock(); }
     // Kopf der Zeile: Zeit, angezeigte km, Werte des Sticks
-    String out; out.reserve(nl * 32 + 256);
-    char h[200];
     float soc = NAN, odo = NAN, et = NAN, bt = NAN; uint32_t age;
     telem_get_latest(TELEM_SOC, &soc, &age);
     telem_get_latest(TELEM_ODOMETER, &odo, &age);
     telem_get_latest(TELEM_EXT_TEMP, &et, &age);
     telem_get_latest(TELEM_BATT_TEMP, &bt, &age);
+    char h[200];
     snprintf(h, sizeof(h), "{\"t\":%lu,\"km\":%d,\"soc\":%.1f,\"odo\":%.0f,\"et\":%.1f,\"bt\":%.1f,\"r\":{",
              (unsigned long)(rtc_unix_ms() / 1000ULL), s_target_km, isnan(soc) ? -1.f : soc, isnan(odo) ? -1.f : odo,
              isnan(et) ? -99.f : et, isnan(bt) ? -99.f : bt);
-    out += h;
-    bool first = true;
-    for (int i = 0; i < nl && !s_abort && !g_shutdown; i++) {
+    String part; part.reserve(1600);
+    part += h;
+    bool first = true, ok = true;
+    for (int i = 0; i < nl && !s_abort && !g_shutdown && ok; i++) {
         s_done = i + 1; s_pos = list[i].did; s_req = list[i].req;
         if (!wait_awake()) break;
         uint8_t req[3] = { 0x22, (uint8_t)(list[i].did >> 8), (uint8_t)(list[i].did & 0xFF) };
@@ -219,21 +275,27 @@ static void measure_task(void*) {
         if (n >= 4 && resp[0] == 0x62) {
             s_answers++;
             char kv[48]; snprintf(kv, sizeof(kv), "%s\"%lX:%04X\":\"", first ? "" : ",", (unsigned long)list[i].req, list[i].did);
-            out += kv; first = false;
-            for (int j = 3; j < n && j < 3 + 24; j++) { char b[3]; snprintf(b, sizeof(b), "%02X", resp[j]); out += b; }
-            out += "\"";
-        } else s_silent++;
+            part += kv; first = false;
+            for (int j = 3; j < n && j < 3 + 24; j++) { char b[3]; snprintf(b, sizeof(b), "%02X", resp[j]); part += b; }
+            part += "\"";
+            const uint8_t* d = resp + 3; int dn = n - 3;
+            if (matches(d, dn, s_target_km) && s_nhits < DS_MAX_HITS) {
+                Hit& hh = s_hits[s_nhits++];
+                hh.did = list[i].did; hh.len = (uint8_t)min(dn, 8); memcpy(hh.b, d, hh.len); hh.match = true;
+            }
+        } else if (n >= 3 && resp[0] == 0x7F) s_nrc++;
+        else s_silent++;
+        if (part.length() > 1200) { ok = tmp_write(part); part = ""; }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-    out += "}}\n";
-    if (!s_abort && spiffs_lock(2000)) {
-        File f = SPIFFS.open(DID_RUNS_FILE, "a");
-        if (f) { f.print(out); f.close(); }
-        spiffs_unlock();
-        s_runs++;
-    }
-    char m[96];
-    snprintf(m, sizeof(m), "DID messen fertig (Anzeige %d km): %u Werte gespeichert, Lauf %u", s_target_km, s_answers, s_runs);
+    part += "}}\n";
+    bool saved = false;
+    if (ok && !s_abort && !g_shutdown) saved = tmp_write(part) && tmp_commit();
+    else if (spiffs_lock(1000)) { SPIFFS.remove(DID_RUN_TMP); spiffs_unlock(); }
+    if (saved) s_runs++;
+    if (saved) snprintf(m, sizeof(m), "DID messen fertig (Anzeige %d km): %u Werte, %u Treffer, Lauf %u gespeichert",
+                        s_target_km, s_answers, s_nhits, s_runs);
+    else snprintf(m, sizeof(m), "DID messen: Lauf NICHT gespeichert (%s)", s_abort ? "abgebrochen" : "Speicher voll?");
     syslog("CAN", m);
     s_running = false;
     vTaskDelete(NULL);
@@ -241,7 +303,8 @@ static void measure_task(void*) {
 
 bool didsearch_measure(int target_km) {
     if (s_running || target_km < 0) return false;
-    s_mode = 3; s_target_km = target_km; s_answers = s_nrc = s_silent = 0; s_abort = false; s_paused = false;
+    s_mode = 3; s_phase = 0; s_target_km = target_km; s_answers = s_nrc = s_silent = 0; s_nhits = 0;
+    s_abort = false; s_paused = false;
     s_running = true;
     if (xTaskCreatePinnedToCore(measure_task, "DIDMEAS", 6144, nullptr, 1, nullptr, 0) != pdPASS) {
         s_running = false; return false;
@@ -304,6 +367,8 @@ void didsearch_status(JsonDocument& doc) {
     static bool s_counted = false;
     if (!s_counted) { s_known = count_lines(DID_KNOWN_FILE); s_runs = count_lines(DID_RUNS_FILE); s_counted = true; }
     doc["mode"]    = s_mode;
+    doc["phase"]   = s_phase;
+    doc["target"]  = s_mode == 3 ? s_target_km : s_target;
     doc["known"]   = s_known;
     doc["runs"]    = s_runs;
     doc["total"]   = s_total;
@@ -317,7 +382,6 @@ void didsearch_status(JsonDocument& doc) {
     doc["answers"] = s_answers;
     doc["nrc"]     = s_nrc;
     doc["silent"]  = s_silent;
-    doc["target"]  = s_target;
     JsonArray a = doc["hits"].to<JsonArray>();
     for (int i = 0; i < s_nhits; i++) {
         JsonObject o = a.add<JsonObject>();

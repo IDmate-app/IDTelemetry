@@ -6,7 +6,7 @@
 //  Hardware: LILYGO T-SIM7080G-S3 (ESP32-S3-WROOM-1-N16R8) + SN65HVD230
 // ============================================================
 
-#define FW_VERSION  "1.7.10"
+#define FW_VERSION  "1.7.11"
 
 // Build-Kennung (<Version>-g<Commit>), von scripts/build_id.py gesetzt; ohne Script
 // (z. B. Arduino-IDE) gleich der Version. Variante: "full" / "lite".

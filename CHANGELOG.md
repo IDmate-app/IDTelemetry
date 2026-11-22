@@ -3,6 +3,21 @@
 All notable changes. Format: [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [1.7.11] – 2026-11-22
+
+**Deutsch, kurz:**
+- Debug-Seite: „Reichweite finden“ ist jetzt ein einziger Ablauf – Reichweite eintragen, „Messen“ drücken. Beim ersten Mal sucht der Stick die Kennungen selbst vorher. Ein Download „Messdaten herunterladen“ statt drei Bereichen und zwei Dateien.
+- Messen zeigt gleich die Antworten, in denen die eingetragene Reichweite vorkommt.
+- Behoben: Ein Messlauf konnte verloren gehen, weil alle Antworten zuerst im Speicher gesammelt wurden; jetzt werden sie Stück für Stück gespeichert. Das Syslog sagt, ob der Lauf gespeichert wurde.
+
+### Changed
+
+- **One flow for finding the range** (Debug page): the separate "DID search", "Range measurement series" and "Wake test" blocks are one card. "Measure" collects the identifiers first when no list exists yet, then reads them all; answers containing the shown range are listed as hits. One download (the runs, `did_runs.jsonl`); "look for identifiers again" and "delete runs" as small buttons; the wake test as one row.
+
+### Fixed
+
+- **Measurement runs were never stored**: the whole run was built as one string of up to ~30 KB in RAM before writing. It is now written in pieces to `/did_run.tmp` and appended to `did_runs.jsonl` at the end; the syslog says "Lauf … gespeichert" or "NICHT gespeichert". The identifier list holds up to 640 entries (was 400; the car answered 406).
+
 ## [1.7.10] – 2026-11-20
 
 **Deutsch, kurz:**

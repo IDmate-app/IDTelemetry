@@ -234,47 +234,28 @@
   </div>
   <div class="log-box" id="mqtt-preview" style="max-height:180px;white-space:pre">Lade...</div>
 
-  <!-- 1.7.9: DID-Suche (z. B. Reichweite) -->
-  <div class="section-title" style="margin-top:16px" data-i18n="dbg.ds_title">DID-Suche (Reichweite)</div>
+  <!-- 1.7.11: Reichweite finden - ein Ablauf (vorher DID-Suche, Messreihe und Weck-Test getrennt) -->
+  <div class="section-title" style="margin-top:16px" data-i18n="dbg.rf_title">Reichweite finden</div>
   <div class="card" style="font-size:11px">
-    <div style="color:var(--muted);margin-bottom:6px;line-height:1.5" data-i18n="dbg.ds_desc">Fragt alle Kennungen eines Bereichs nur lesend ab. Auto wach (Z&#252;ndung an, im Stand), angezeigte Reichweite eintragen: Antworten, in denen der Wert vorkommt, werden als Treffer markiert. Danach die Reichweite &#228;ndern (ein St&#252;ck fahren) und erneut suchen &#8211; was beide Male passt, ist es.</div>
+    <div style="color:var(--muted);margin-bottom:6px;line-height:1.5" data-i18n="dbg.rf_desc">Z&#252;ndung an, im Stand. Die Reichweite aus dem Kombiinstrument eintragen und &#8222;Messen&#8220; dr&#252;cken. Beim ersten Mal sucht der Stick vorher alle Kennungen (einige Minuten). Bei verschiedenen Reichweiten mehrmals messen, dann die Messdaten herunterladen.</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-      <select id="ds-ecu" style="flex:1;min-width:160px">
-        <option value="17FC007B/17FE007B">17FC007B (Batterie/Antrieb)</option>
-        <option value="17FC0076/17FE0076">17FC0076</option>
-        <option value="714/77E">714 (Kombiinstrument)</option>
-        <option value="710/77A">710 (Gateway)</option>
-        <option value="746/7B0">746 (Klima)</option>
-        <option value="7E0/7E8">7E0 (Motor)</option>
-      </select>
-      <input id="ds-from" value="0200" maxlength="4" style="width:58px" title="von (hex)">
-      <input id="ds-to" value="02FF" maxlength="4" style="width:58px" title="bis (hex)">
-      <input id="ds-target" type="number" min="0" max="2000" style="width:80px" data-i18n-ph="dbg.ds_target" placeholder="km Anzeige">
-      <button class="btn accent" style="font-size:11px;padding:3px 10px" onclick="dsStart()" data-i18n="dbg.ds_start">Suchen</button>
+      <input id="dm-km" type="number" min="0" max="2000" style="width:120px" data-i18n-ph="dbg.ds_target" placeholder="km Anzeige">
+      <button class="btn accent" style="font-size:11px;padding:3px 12px" onclick="dmMeasure()" data-i18n="dbg.rf_measure">Messen</button>
       <button class="btn danger" style="font-size:11px;padding:3px 10px" onclick="dsAbort()" data-i18n="dbg.ds_abort">Stopp</button>
     </div>
-    <div style="border-top:1px solid #333;margin-top:10px;padding-top:8px">
-      <div style="font-weight:600;margin-bottom:4px" data-i18n="dbg.dm_title">Messreihe Reichweite</div>
-      <div style="color:var(--muted);margin-bottom:6px;line-height:1.5" data-i18n="dbg.dm_desc">1. Einmal Kennungen sammeln (Auto wach, im Stand, dauert einige Minuten). 2. Bei jeder Gelegenheit die angezeigte Reichweite eintragen und messen &#8211; m&#246;glichst bei verschiedenen Reichweiten und Temperaturen. Die Datei der Messl&#228;ufe zur Auswertung herunterladen.</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-        <button class="btn" style="font-size:11px;padding:3px 10px" onclick="dmCollect()" data-i18n="dbg.dm_collect">1. Kennungen sammeln</button>
-        <input id="dm-km" type="number" min="0" max="2000" style="width:80px" data-i18n-ph="dbg.ds_target" placeholder="km Anzeige">
-        <button class="btn accent" style="font-size:11px;padding:3px 10px" onclick="dmMeasure()" data-i18n="dbg.dm_measure">2. Messen</button>
-      </div>
-      <div id="dm-info" style="margin-top:6px;color:var(--muted)"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
-        <a href="/download-did-runs" class="btn" style="font-size:10px;padding:2px 10px;text-decoration:none" download>&#x2193; did_runs.jsonl</a>
-        <a href="/download-did-known" class="btn" style="font-size:10px;padding:2px 10px;text-decoration:none" download>&#x2193; did_known.txt</a>
-        <button class="btn danger" style="font-size:10px;padding:2px 10px" onclick="dmClear()" data-i18n="dbg.dm_clear">Messl&#228;ufe l&#246;schen</button>
-      </div>
-    </div>
-    <div style="border-top:1px solid #333;margin-top:10px;padding-top:8px">
-      <div style="font-weight:600;margin-bottom:4px" data-i18n="dbg.wt_title">Weck-Test</div>
-      <div style="color:var(--muted);margin-bottom:6px;line-height:1.5" data-i18n="dbg.wt_desc">Nur im offenen Auto sitzend dr&#252;cken (Z&#252;ndung aus). Der Stick schickt eine Lese-Anfrage auch ohne Spannung am Port; das Ergebnis steht im System Log.</div>
-      <button class="btn" style="font-size:11px;padding:3px 10px" onclick="wakeTest()" data-i18n="dbg.wt_btn">Weck-Test</button>
-    </div>
-    <div id="ds-status" style="margin-top:6px;color:var(--muted)"></div>
+    <div id="dm-info" style="margin-top:6px"></div>
+    <div id="ds-status" style="margin-top:4px;color:var(--muted)"></div>
     <div class="log-box" id="ds-hits" style="max-height:200px;white-space:pre;margin-top:6px;display:none"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center">
+      <a href="/download-did-runs" id="dm-dl" class="btn" style="font-size:11px;padding:3px 12px;text-decoration:none" download data-i18n="dbg.rf_download">&#x2193; Messdaten herunterladen</a>
+      <span style="flex:1"></span>
+      <button class="btn" style="font-size:10px;padding:2px 8px" onclick="dmCollect()" data-i18n="dbg.rf_recollect">Kennungen neu suchen</button>
+      <button class="btn danger" style="font-size:10px;padding:2px 8px" onclick="dmClear()" data-i18n="dbg.dm_clear">Messl&#228;ufe l&#246;schen</button>
+    </div>
+    <div style="border-top:1px solid #333;margin-top:10px;padding-top:6px;display:flex;gap:8px;align-items:center">
+      <button class="btn" style="font-size:10px;padding:2px 8px;white-space:nowrap" onclick="wakeTest()" data-i18n="dbg.wt_btn" >Weck-Test</button>
+      <span style="color:var(--muted);line-height:1.4" data-i18n="dbg.wt_desc">Nur im offenen Auto sitzend dr&#252;cken (Z&#252;ndung aus). Der Stick schickt eine Lese-Anfrage auch ohne Spannung am Port; das Ergebnis steht im System Log.</span>
+    </div>
   </div>
 
   <!-- System Log -->
@@ -783,20 +764,8 @@ async function loadMqttPreview() {
 var _logCan=false;
 var _tiEl=null;
 
-// ── 1.7.9: DID-Suche ──
+// ── 1.7.11: Reichweite finden ──
 var _dsTimer=null;
-async function dsStart(){
-  var e=document.getElementById('ds-ecu').value.split('/');
-  var tg=document.getElementById('ds-target').value;
-  var body={req:e[0],resp:e[1],from:document.getElementById('ds-from').value.trim(),to:document.getElementById('ds-to').value.trim(),target:tg===''?-1:parseInt(tg)};
-  try{
-    var r=await fetch('/api/did-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(r.status===401){toast(t('dbg.ds_auth'),false);return;}
-    var d=await r.json();
-    if(!d.ok){toast(t('dbg.ds_busy'),false);return;}
-    dsPoll();
-  }catch(_){toast(t('dbg.ds_busy'),false);}
-}
 async function dsPost(url,body){
   try{
     var r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
@@ -805,7 +774,7 @@ async function dsPost(url,body){
     dsPoll(); return true;
   }catch(_){toast(t('dbg.ds_busy'),false);return false;}
 }
-function dmCollect(){dsPost('/api/did-collect');}
+function dmCollect(){if(confirm(t('dbg.rf_recollect')+'?'))dsPost('/api/did-collect');}
 function dmMeasure(){var v=document.getElementById('dm-km').value;if(v===''){toast(t('dbg.dm_need_km'),false);return;}dsPost('/api/did-measure',{km:parseInt(v)});}
 function dmClear(){if(confirm(t('dbg.dm_clear')+'?'))dsPost('/api/did-runs/clear');}
 async function wakeTest(){if(await dsPost('/api/wake-test'))toast(t('dbg.wt_started'));}
@@ -816,16 +785,17 @@ async function dsPoll(){
     var d=await(await fetch('/api/did-search')).json();
     var st=document.getElementById('ds-status');
     document.getElementById('dm-info').textContent=t('dbg.dm_info',[d.known||0,d.runs||0]);
+    var dl=document.getElementById('dm-dl'); if(dl)dl.style.opacity=d.runs?'1':'.5';
     if(d.mode===2||d.mode===3){
-      st.textContent=(d.mode===2?t('dbg.dm_collect'):t('dbg.dm_measure'))+': '+(d.running?(d.paused?t('dbg.ds_paused'):t('dbg.ds_running')):t('dbg.ds_done'))+' · '+d.done+'/'+d.total+' · '+t('dbg.ds_counts',[d.answers,d.nrc,d.silent]);
+      var what=(d.mode===2||d.phase===1)?t('dbg.rf_collecting'):t('dbg.rf_reading');
+      var pct=d.total?Math.round(100*d.done/d.total):0;
+      st.textContent=what+': '+(d.running?(d.paused?t('dbg.ds_paused'):pct+' %'):t('dbg.ds_done'))+' · '+t('dbg.ds_counts',[d.answers,d.nrc,d.silent]);
     }else if(d.mode===4){
       st.textContent=t('dbg.wt_title')+': '+(d.running?t('dbg.ds_running'):t('dbg.wt_done'));
-    }else if(d.running||d.answers||d.nrc||d.silent){
-      var tot=d.to-d.from+1, done=d.pos-d.from+(d.running?0:1);
-      st.textContent=(d.running?(d.paused?t('dbg.ds_paused'):t('dbg.ds_running')):t('dbg.ds_done'))+' · 0x'+d.pos.toString(16).toUpperCase()+' · '+done+'/'+tot+' · '+t('dbg.ds_counts',[d.answers,d.nrc,d.silent]);
-    }
+    }else st.textContent='';
     var h=document.getElementById('ds-hits');
-    if(d.hits&&d.hits.length){h.style.display='';h.textContent=d.hits.map(function(x){return (x.match?'\u2605 ':'  ')+'0x'+x.did+': '+x.hex;}).join('\n');}
+    if(d.mode===3&&d.hits&&d.hits.length){h.style.display='';h.textContent=t('dbg.rf_hits',[d.target])+'\n'+d.hits.map(function(x){return '\u2605 0x'+x.did+': '+x.hex;}).join('\n');}
+    else h.style.display='none';
     if(d.running)_dsTimer=setTimeout(dsPoll,1500);
   }catch(_){_dsTimer=setTimeout(dsPoll,3000);}
 }
